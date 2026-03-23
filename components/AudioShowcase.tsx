@@ -1,0 +1,85 @@
+'use client'
+import { useState, useRef } from 'react'
+import { motion } from 'framer-motion'
+import AnimatedSection from './AnimatedSection'
+
+const soundscapes = [
+  { label: 'Dawn Chorus', location: 'Waitākere Ranges', duration: '1:23', color: '#0ea5e9' },
+  { label: 'City Rain', location: 'Wellington CBD', duration: '0:58', color: '#6366f1' },
+  { label: 'Surf Break', location: 'Piha Beach', duration: '2:10', color: '#10b981' },
+]
+
+function WaveformBars({ playing, color }: { playing: boolean; color: string }) {
+  return (
+    <div className="flex items-center gap-0.5 h-8">
+      {Array.from({ length: 28 }).map((_, i) => {
+        const base = 30 + Math.sin(i * 0.8) * 50 + Math.sin(i * 0.3) * 30
+        return (
+          <motion.div
+            key={i}
+            className="w-1 rounded-full"
+            style={{ backgroundColor: color }}
+            animate={playing ? { scaleY: [1, 0.3 + Math.random() * 0.7, 1] } : { scaleY: base / 100 }}
+            transition={playing ? { repeat: Infinity, duration: 0.4 + Math.random() * 0.4, delay: i * 0.02 } : {}}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+export default function AudioShowcase() {
+  const [playing, setPlaying] = useState<number | null>(null)
+
+  return (
+    <section className="bg-ocean-dark text-white py-24">
+      <div className="max-w-5xl mx-auto px-6">
+        <AnimatedSection>
+          <h2 className="font-serif text-4xl mb-4">Listen to New Zealand</h2>
+          <p className="text-gray-400 mb-12">
+            A selection of soundscapes from our field recording archive.
+          </p>
+        </AnimatedSection>
+
+        <div className="space-y-4">
+          {soundscapes.map((s, i) => (
+            <AnimatedSection key={s.label} delay={i * 0.1}>
+              <div className="flex items-center gap-6 bg-white/5 hover:bg-white/10 rounded-2xl px-6 py-5 transition-colors group">
+                <button
+                  onClick={() => setPlaying(playing === i ? null : i)}
+                  className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center flex-shrink-0 hover:border-white/60 transition-colors"
+                  aria-label={playing === i ? 'Pause' : 'Play'}
+                >
+                  {playing === i ? (
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                  )}
+                </button>
+
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-white">{s.label}</p>
+                  <p className="text-sm text-gray-400">{s.location}</p>
+                </div>
+
+                <div className="hidden sm:block flex-1">
+                  <WaveformBars playing={playing === i} color={s.color} />
+                </div>
+
+                <span className="text-sm text-gray-400 flex-shrink-0">{s.duration}</span>
+              </div>
+            </AnimatedSection>
+          ))}
+        </div>
+
+        <p className="text-center text-gray-500 text-sm mt-8">
+          Audio player — connect real audio files in <code className="text-gray-400">components/AudioShowcase.tsx</code>
+        </p>
+      </div>
+    </section>
+  )
+}
