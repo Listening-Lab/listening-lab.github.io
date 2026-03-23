@@ -1,12 +1,12 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import AnimatedSection from './AnimatedSection'
 
 const soundscapes = [
-  { label: 'Dawn Chorus', location: 'Waitākere Ranges', duration: '1:23', color: '#0ea5e9' },
-  { label: 'City Rain', location: 'Wellington CBD', duration: '0:58', color: '#6366f1' },
-  { label: 'Surf Break', location: 'Piha Beach', duration: '2:10', color: '#10b981' },
+  { label: 'Dawn Chorus', location: 'Waitākere Ranges', duration: '0:10', color: '#0ea5e9', src: '/audio/test.mp3' },
+  { label: 'City Rain',   location: 'Wellington CBD',   duration: '0:10', color: '#6366f1', src: '/audio/test.mp3' },
+  { label: 'Surf Break',  location: 'Piha Beach',       duration: '0:10', color: '#10b981', src: '/audio/test.mp3' },
 ]
 
 function WaveformBars({ playing, color }: { playing: boolean; color: string }) {
@@ -30,6 +30,23 @@ function WaveformBars({ playing, color }: { playing: boolean; color: string }) {
 
 export default function AudioShowcase() {
   const [playing, setPlaying] = useState<number | null>(null)
+  const audioRefs = useRef<(HTMLAudioElement | null)[]>([])
+
+  // Pause whichever track was playing when a new one starts
+  useEffect(() => {
+    audioRefs.current.forEach((audio, i) => {
+      if (!audio) return
+      if (i === playing) {
+        audio.play().catch(() => {}) // catch autoplay policy errors silently
+      } else {
+        audio.pause()
+      }
+    })
+  }, [playing])
+
+  function handleEnded() {
+    setPlaying(null)
+  }
 
   return (
     <section className="bg-ocean-dark text-white py-24">
@@ -40,6 +57,17 @@ export default function AudioShowcase() {
             A selection of soundscapes from our field recording archive.
           </p>
         </AnimatedSection>
+
+        {/* Hidden audio elements — one per track */}
+        {soundscapes.map((s, i) => (
+          <audio
+            key={s.src}
+            ref={el => { audioRefs.current[i] = el }}
+            src={s.src}
+            onEnded={handleEnded}
+            preload="none"
+          />
+        ))}
 
         <div className="space-y-4">
           {soundscapes.map((s, i) => (
@@ -75,10 +103,6 @@ export default function AudioShowcase() {
             </AnimatedSection>
           ))}
         </div>
-
-        <p className="text-center text-gray-500 text-sm mt-8">
-          Audio player — connect real audio files in <code className="text-gray-400">components/AudioShowcase.tsx</code>
-        </p>
       </div>
     </section>
   )
