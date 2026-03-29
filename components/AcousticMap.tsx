@@ -8,7 +8,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 // Map (left panel) points
 const MAP_POINT_SIZE_MIN      = 0.55  // minimum base size per point
 const MAP_POINT_SIZE_RANGE    = 0.65  // random size added on top of min (so max = min + range)
-const MAP_POINT_SELECTED_SCALE = 0.4  // size multiplier applied to all points when a region is selected
+const MAP_POINT_SELECTED_SCALE = 0.3  // size multiplier applied to all points when a region is selected
 
 // UMAP (right panel) points
 const UMAP_POINT_HOVER_SCALE    = 2.0  // size multiplier when a point is hovered
@@ -829,10 +829,10 @@ export default function AcousticMap() {
   return (
     <section className="relative w-full bg-ocean-dark text-white overflow-hidden" style={{ minHeight: '100vh' }}>
       {/* Header */}
-      <div className="relative z-10 pt-16 pb-4 text-center px-4">
+      <div className="relative z-10 pt-24 pb-4 text-center px-4">
         <p className="text-brand-100 text-xs tracking-widest uppercase mb-2">Interactive</p>
         <h2 className="font-serif text-4xl md:text-5xl mb-3">Acoustic Map of Aotearoa</h2>
-        <p>We are build a map of the sounds of nature.</p>
+        <p className="text-gray-200 max-w-xl pb-4 mx-auto text-sm">We are building a map of the sounds of nature.</p>
         <p className="text-gray-400 max-w-xl mx-auto text-sm">
           {selectedRegion
             ? <>Showing <span className="text-white">{selectedRegion.name}</span> — click elsewhere on the map to return</>

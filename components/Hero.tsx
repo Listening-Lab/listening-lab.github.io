@@ -39,7 +39,7 @@ export default function Hero() {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.1 }}
-          className="font-serif text-6xl md:text-8xl leading-tight mb-8"
+          className="font-serif text-6xl md:text-7xl leading-tight mb-8"
         >
           Sound is how we understand the world.
         </motion.h1>
