@@ -31,6 +31,11 @@ export default function ContactForm() {
   }
 
   return (
+    <div className="space-y-6">
+      <div>
+        <p className="text-gray-700">We welcome collaborations and contributions.</p>
+        <p className="text-gray-600 mt-1 text-sm">If you wish to contribute recordings to the Acoustic Map of New Zealand then please get in contact to discuss further.</p>
+      </div>
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid sm:grid-cols-2 gap-6">
         <div>
@@ -79,5 +84,6 @@ export default function ContactForm() {
         </p>
       )}
     </form>
+    </div>
   )
 }

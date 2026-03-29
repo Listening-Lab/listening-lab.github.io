@@ -18,7 +18,7 @@ export default function Navbar() {
   const [open, setOpen] = useState(false)
 
   return (
-    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-gray-100">
+    <header className="sticky top-0 z-50 bg-ocean-dark backdrop-blur">
       <nav className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         <Link href="/" className="font-serif text-xl text-ocean-dark font-semibold">
           Listening Lab

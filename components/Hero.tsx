@@ -32,7 +32,7 @@ export default function Hero() {
           transition={{ duration: 0.6 }}
           className="text-brand-100 text-sm tracking-widest uppercase mb-6"
         >
-          Listening Lab NZ
+          The Listening Lab
         </motion.p>
 
         <motion.h1
@@ -41,7 +41,7 @@ export default function Hero() {
           transition={{ duration: 0.7, delay: 0.1 }}
           className="font-serif text-6xl md:text-8xl leading-tight mb-8"
         >
-          Sound is how we know the world.
+          Sound is how we understand the world.
         </motion.h1>
 
         <motion.p
