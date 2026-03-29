@@ -25,7 +25,7 @@ export default function Hero() {
         </svg>
       </div>
 
-      <div className="relative z-10 text-center max-w-3xl mx-auto px-6">
+      <div className="relative z-10 text-center max-w-3xl mx-auto px-6 mt-16">
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

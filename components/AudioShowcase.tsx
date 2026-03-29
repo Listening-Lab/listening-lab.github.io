@@ -4,9 +4,9 @@ import { motion } from 'framer-motion'
 import AnimatedSection from './AnimatedSection'
 
 const soundscapes = [
-  { label: 'Dawn Chorus', location: 'Waitākere Ranges', duration: '0:10', color: '#0ea5e9', src: '/audio/test.mp3' },
-  { label: 'City Rain',   location: 'Wellington CBD',   duration: '0:10', color: '#6366f1', src: '/audio/test.mp3' },
-  { label: 'Surf Break',  location: 'Piha Beach',       duration: '0:10', color: '#10b981', src: '/audio/test.mp3' },
+  { label: 'Tui', location: 'Lake Tikitapu', duration: '3:03', color: '#0ea5e9', src: '/audio/xcnz/857958.wav' },
+  { label: 'Bellbird (Kōmako)',   location: 'Kahurangi National Park',   duration: '1:35', color: '#6366f1', src: '/audio/xcnz/842925.wav' },
+  { label: 'Little Spotted Kiwi (Kiwi Pukupuku)',  location: 'Kapiti Island',       duration: '0:51', color: '#10b981', src: '/audio/xcnz/88143.wav' },
 ]
 
 function WaveformBars({ playing, color }: { playing: boolean; color: string }) {

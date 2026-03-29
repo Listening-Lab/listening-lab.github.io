@@ -25,7 +25,7 @@ const DRIFT_AMP_XY   = 0.09;  const DRIFT_AMP_Z    = 0.07
 const DRIFT_FREQ_X   = 0.32;  const DRIFT_FREQ_Y   = 0.27;  const DRIFT_FREQ_Z   = 0.38
 
 // Audio fade  (AUDIO_FADE_STEPS × AUDIO_FADE_INTERVAL_MS = total fade duration in ms)
-const AUDIO_FADE_STEPS       = 40   // number of volume steps in a fade
+const AUDIO_FADE_STEPS       = 80   // number of volume steps in a fade
 const AUDIO_FADE_INTERVAL_MS = 50   // ms between each step  → 20 × 50 ms = 1 s
 
 // ─── coordinate system ───────────────────────────────────────────────────────
@@ -534,9 +534,10 @@ function initThree(
 
   const leftClock = new THREE.Clock()
   let leftAnimId = 0
+  let paused = false
 
   const animateLeft = () => {
-    leftAnimId = requestAnimationFrame(animateLeft)
+    if (!paused) leftAnimId = requestAnimationFrame(animateLeft)
     const t = leftClock.getElapsedTime()
     leftMat.uniforms.uTime.value = t
 
@@ -676,7 +677,7 @@ function initThree(
   const rightPointsObj = rightScene.children[0] as THREE.Points
 
   const animateRight = () => {
-    rightAnimId = requestAnimationFrame(animateRight)
+    if (!paused) rightAnimId = requestAnimationFrame(animateRight)
     const t = rightClock.getElapsedTime()
     rightMat.uniforms.uTime.value = t
 
@@ -747,7 +748,12 @@ function initThree(
   }
   window.addEventListener('resize', onResize)
 
-  // expose updateSelection + setMuted so React can call them
+  // expose updateSelection, setMuted, setPaused so React can call them
+  ;(leftEl as any).__setPaused = (v: boolean) => {
+    if (paused === v) return
+    paused = v
+    if (!paused) { animateLeft(); animateRight() }
+  }
   ;(leftEl as any).__updateSelection = updateSelection
   ;(rightEl as any).__setMuted = (m: boolean) => {
     activeAudio.forEach(entry => { entry.el.muted = m })
@@ -772,8 +778,9 @@ function initThree(
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function AcousticMap() {
-  const leftRef  = useRef<HTMLDivElement>(null)
-  const rightRef = useRef<HTMLDivElement>(null)
+  const leftRef     = useRef<HTMLDivElement>(null)
+  const rightRef    = useRef<HTMLDivElement>(null)
+  const sectionRef  = useRef<HTMLElement>(null)
   const selectedRef = useRef(-1)
 
   const [loaded, setLoaded] = useState(false)
@@ -824,10 +831,20 @@ export default function AcousticMap() {
     return () => { unmounted = true; cleanup?.() }
   }, [])
 
+  useEffect(() => {
+    if (!sectionRef.current) return
+    const obs = new IntersectionObserver(
+      ([entry]) => { (leftRef.current as any)?.__setPaused?.(!entry.isIntersecting) },
+      { threshold: 0 }
+    )
+    obs.observe(sectionRef.current)
+    return () => obs.disconnect()
+  }, [])
+
   const selectedRegion = dataRef && selectedIdx >= 0 ? dataRef.regions[selectedIdx] : null
 
   return (
-    <section className="relative w-full bg-ocean-dark text-white overflow-hidden" style={{ minHeight: '100vh' }}>
+    <section ref={sectionRef} className="relative w-full bg-ocean-dark text-white overflow-hidden" style={{ minHeight: '100vh' }}>
       {/* Header */}
       <div className="relative z-10 pt-24 pb-4 text-center px-4">
         <p className="text-brand-100 text-xs tracking-widest uppercase mb-2">Interactive</p>
@@ -908,7 +925,7 @@ export default function AcousticMap() {
 
       {/* Hover label — region (left panel) */}
       {hoveredRegion && !selectedRegion && (
-        <div className="absolute top-1/3 left-6 pointer-events-none z-20">
+        <div className="absolute bottom-1/3 left-6 pointer-events-none z-20">
           <div className="bg-black/50 backdrop-blur-md border border-white/10 rounded-xl px-4 py-3">
             <p className="text-white text-sm font-medium">{hoveredRegion}</p>
             <p className="text-white/40 text-xs mt-0.5">Click to explore</p>
@@ -918,7 +935,7 @@ export default function AcousticMap() {
 
       {/* Hover label — point (right panel) */}
       {hoveredPoint && (
-        <div className="absolute top-1/3 right-6 pointer-events-none z-20">
+        <div className="absolute bottom-1/3 right-6 pointer-events-none z-20">
           <div className="bg-black/50 backdrop-blur-md border border-white/10 rounded-xl px-4 py-3 max-w-[200px]">
             <p className="text-white text-sm font-medium leading-tight">{hoveredPoint.name}</p>
             <p className="text-white/40 text-xs mt-1">{hoveredPoint.region}</p>
@@ -939,7 +956,7 @@ export default function AcousticMap() {
             style={{ borderColor: selectedRegion.color + '60' }}
           >
             <span className="mr-2 inline-block w-2 h-2 rounded-full" style={{ background: selectedRegion.color }} />
-            {selectedRegion.name} · ← Return to full map
+            {selectedRegion.name} ← Return to full map
           </button>
         </div>
       )}

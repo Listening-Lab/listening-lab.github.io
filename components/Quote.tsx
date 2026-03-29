@@ -1,11 +1,41 @@
 import AnimatedSection from './AnimatedSection'
+import Image from 'next/image'
 
 
 export default async function Quote() {
 
     return (
-    <section className="py-24 bg-ocean-dark">
-      <div className="max-w-3xl mx-auto px-6 text-center">
+    <section className="relative py-24 bg-ocean-dark overflow-hidden">
+
+      {/* ── Left image ── */}
+      <div className="absolute left-0 top-0 w-1/2 h-full pointer-events-none">
+        <Image
+          src="/images/joshua-harris-BIIfuwj7gEw-unsplash.jpg"
+          alt=""
+          fill
+          className="object-cover object-center"
+        />
+        {/* Dark overall tint */}
+        <div className="absolute inset-0 bg-ocean-dark/45" />
+        {/* Fade toward right */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(to right, rgba(10,22,40,0.05) 0%, rgba(10,22,40,0.55) 65%, #0a1628 100%)',
+          }}
+        />
+        {/* Fade top & bottom */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(to bottom, #0a1628 0%, transparent 18%, transparent 82%, #0a1628 100%)',
+          }}
+        />
+      </div>
+
+      <div className="relative z-10 max-w-3xl mx-auto px-6 text-center">
         <AnimatedSection>
           <div className="flex flex-col">
             <span className="font-serif text-7xl leading-none text-brand-500 select-none self-start">&ldquo;</span>

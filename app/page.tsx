@@ -5,6 +5,8 @@ import AudioShowcase from '@/components/AudioShowcase'
 import AcousticMap from '@/components/AcousticMap'
 import Region from '@/components/Map'
 import Quote from '@/components/Quote'
+import Highlight from '@/components/Highlight'
+import About from '@/components/About'
 
 export default function HomePage() {
   return (
@@ -13,9 +15,11 @@ export default function HomePage() {
       {/* <Region /> */}
       <AcousticMap />
       <AudioShowcase />
-      <Quote />
+      <About />
+      {/* <Highlight /> */}
       {/* <FeaturedResearch /> */}
-      <LatestPosts />
+      {/* <LatestPosts /> */}
+      <Quote />
     </>
   )
 }

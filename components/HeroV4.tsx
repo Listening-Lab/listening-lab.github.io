@@ -12,7 +12,7 @@ const WAVEFORM_HEIGHTS = Array.from({ length: 28 }, (_, i) =>
 
 export default function HeroV4() {
   return (
-    <section className="relative min-h-[90vh] bg-ocean-dark text-white overflow-hidden flex items-center">
+    <section className="relative min-h-[calc(90vh+4rem)] bg-ocean-dark text-white overflow-hidden flex items-center">
       {/* ── Background photo ── */}
       <div className="absolute inset-0">
         <Image
@@ -45,7 +45,7 @@ export default function HeroV4() {
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: 'linear-gradient(to bottom, rgba(10,22,40,0.5) 0%, transparent 30%)',
+          background: 'linear-gradient(to bottom, rgba(10,22,40,0.85) 0%, rgba(10,22,40,0.6) 12%, transparent 28%)',
         }}
       />
       <div
@@ -55,11 +55,11 @@ export default function HeroV4() {
 
       {/* ── Right: zoomed NZ map ── */}
       <div className="absolute right-0 top-0 w-[62%] h-full pointer-events-none">
-        <RegionMap selectedRegion="Manawatu-Wanganui" className="opacity-75" static/>
+        <RegionMap selectedRegion="Manawatu-Wanganui" className="opacity-75"/>
       </div>
 
       {/* ── Left: text content (same as V3) ── */}
-      <div className="relative z-20 w-full md:w-[60%] px-8 sm:px-12 md:pl-24 md:pr-8 py-28 md:pb-28 md:pt-0 mt-0 md:-mt-2 flex flex-col">
+      <div className="relative z-20 w-full md:w-[60%] px-8 sm:px-12 md:pl-24 md:pr-8 py-28 md:pb-28 md:pt-0 mt-0 md:-mt-0 flex flex-col">
 
         {/* Waveform accent strip */}
         <motion.div
