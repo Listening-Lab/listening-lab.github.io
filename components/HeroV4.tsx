@@ -61,7 +61,7 @@ export default function HeroV4() {
       </div>
 
       {/* ── Left: text content (same as V3) ── */}
-      <div className="relative z-20 w-full md:w-[60%] px-8 sm:px-12 md:pl-24 md:pr-8 py-28 md:pb-12 md:pt-0 mt-0 md:-mt-0 flex flex-col">
+      <div className="relative z-20 w-full md:w-[60%] px-8 sm:px-12 md:pl-48 md:pr-8 py-28 md:pb-12 md:pt-0 mt-0 md:-mt-0 flex flex-col">
 
         {/* Waveform accent strip */}
         <motion.div
@@ -97,7 +97,7 @@ export default function HeroV4() {
           transition={{ duration: 0.65, delay: 0.12 }}
           className="font-serif text-5xl md:text-[3.2rem] lg:text-6xl leading-tight mb-6"
         >
-          Sound is how we Understand Nature.
+          Sound is how<br />we Understand Nature.
         </motion.h1>
 
         <motion.div

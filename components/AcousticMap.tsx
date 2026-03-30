@@ -718,6 +718,24 @@ function initThree(
   rightEl.addEventListener('touchstart', onRightTouchStart, { passive: true })
   rightEl.addEventListener('touchend',   onRightTouchEnd,   { passive: true })
 
+  // ── Right panel click → play audio ───────────────────────────────────
+  // Audio is intentional (click/tap), not incidental (hover sweep).
+  let clickedAudioIdx = -1
+
+  const onRightClick = () => {
+    if (lastHoveredIdx < 0) return
+    if (clickedAudioIdx === lastHoveredIdx) {
+      // same point — toggle off
+      stopAudio(clickedAudioIdx)
+      clickedAudioIdx = -1
+    } else {
+      if (clickedAudioIdx >= 0) stopAudio(clickedAudioIdx)
+      clickedAudioIdx = lastHoveredIdx
+      playAudio(clickedAudioIdx, recordings[clickedAudioIdx].file)
+    }
+  }
+  rightEl.addEventListener('click', onRightClick)
+
   // ── Audio playback ────────────────────────────────────────────────────
   type AudioEntry = { el: HTMLAudioElement; fadeTimer: ReturnType<typeof setInterval> | null }
   const activeAudio = new Map<number, AudioEntry>()
@@ -799,14 +817,11 @@ function initThree(
     }
 
     if (hitIdx !== lastHoveredIdx) {
-      // fade out audio for the point we just left
-      if (lastHoveredIdx >= 0) stopAudio(lastHoveredIdx)
       lastHoveredIdx = hitIdx
       rightMat.uniforms.uHoveredIdx.value = hitIdx
       if (hitIdx >= 0) {
         const rec = recordings[hitIdx]
         cb.onHoverPoint(rec)
-        playAudio(hitIdx, rec.file)
         // Pulse at lat/lon on left panel — only for active (non-greyed) points
         const sel = cb.getSelected()
         const isActive = sel < 0 || rec.regionIdx === sel
@@ -863,6 +878,7 @@ function initThree(
     window.removeEventListener('mouseup', onLeftMouseUp)
     rightEl.removeEventListener('mousemove', onRightMouseMove)
     rightEl.removeEventListener('mouseleave', onRightMouseLeave)
+    rightEl.removeEventListener('click', onRightClick)
     leftEl.removeEventListener('touchstart', onLeftTouchStart)
     leftEl.removeEventListener('touchmove',  onLeftTouchMove)
     leftEl.removeEventListener('touchend',   onLeftTouchEnd)
