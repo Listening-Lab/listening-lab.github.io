@@ -1,24 +1,25 @@
+import dynamic from 'next/dynamic'
 import HeroV4 from '@/components/HeroV4'
-import FeaturedResearch from '@/components/FeaturedResearch'
-import LatestPosts from '@/components/LatestPosts'
 import AudioShowcase from '@/components/AudioShowcase'
-import AcousticMap from '@/components/AcousticMap'
-import Region from '@/components/Map'
 import Quote from '@/components/Quote'
-import Highlight from '@/components/Highlight'
 import About from '@/components/About'
+
+// Three.js components are lazy-loaded so they don't block the initial JS bundle.
+// Without this, the browser waits for ~600 KB of Three.js to compile before
+// any page content renders (visible as a blank page on cold dev-server starts).
+const AcousticMap = dynamic(() => import('@/components/AcousticMap'), { ssr: false })
 
 export default function HomePage() {
   return (
     <>
       <HeroV4 />
-      {/* <Region /> */}
-      <AcousticMap />
+      <div id="acoustic-map">
+        <AcousticMap />
+      </div>
       <AudioShowcase />
-      <About />
-      {/* <Highlight /> */}
-      {/* <FeaturedResearch /> */}
-      {/* <LatestPosts /> */}
+      <div id="about">
+        <About />
+      </div>
       <Quote />
     </>
   )

@@ -1,8 +1,10 @@
 'use client'
+import dynamic from 'next/dynamic'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
-import RegionMap from '@/components/Map'
+
+const RegionMap = dynamic(() => import('@/components/Map'), { ssr: false })
 
 // ── Waveform bar heights ──────────────────────────────────────────────────────
 const WAVEFORM_HEIGHTS = Array.from({ length: 28 }, (_, i) =>
@@ -59,7 +61,7 @@ export default function HeroV4() {
       </div>
 
       {/* ── Left: text content (same as V3) ── */}
-      <div className="relative z-20 w-full md:w-[60%] px-8 sm:px-12 md:pl-24 md:pr-8 py-28 md:pb-28 md:pt-0 mt-0 md:-mt-0 flex flex-col">
+      <div className="relative z-20 w-full md:w-[60%] px-8 sm:px-12 md:pl-24 md:pr-8 py-28 md:pb-12 md:pt-0 mt-0 md:-mt-0 flex flex-col">
 
         {/* Waveform accent strip */}
         <motion.div
@@ -104,12 +106,12 @@ export default function HeroV4() {
           transition={{ duration: 0.55, delay: 0.48 }}
           className="flex flex-wrap gap-4"
         >
-          <Link
-            href="/research"
+          <button
+            onClick={() => document.getElementById('acoustic-map')?.scrollIntoView({ behavior: 'smooth' })}
             className="bg-white text-ocean-dark px-8 py-3 rounded-full font-medium hover:bg-brand-50 transition-colors"
           >
-            Our Research
-          </Link>
+            Explore the Map
+          </button>
           <Link
             href="/blog"
             className="border border-white/40 px-8 py-3 rounded-full hover:bg-white/10 transition-colors"

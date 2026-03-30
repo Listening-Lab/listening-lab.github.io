@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 const links = [
   { href: '/', label: 'Home' },
-  { href: '/about', label: 'About' },
+  { href: '/about', label: 'About', homeAnchor: 'about' },
   // { href: '/research', label: 'Research' },
   { href: '/team', label: 'Team' },
   { href: '/blog', label: 'Blog' },
@@ -21,6 +21,13 @@ export default function Navbar() {
   const [open, setOpen] = useState(false)
   const [atTop, setAtTop] = useState(true)
   const [hoveredLink, setHoveredLink] = useState<string | null>(null)
+
+  function handleLinkClick(e: React.MouseEvent, link: typeof links[number]) {
+    if (link.homeAnchor && pathname === '/') {
+      e.preventDefault()
+      document.getElementById(link.homeAnchor)?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }
 
   useEffect(() => {
     const onScroll = () => setAtTop(window.scrollY < 10)
@@ -64,6 +71,7 @@ export default function Navbar() {
                 )}
                 <Link
                   href={link.href}
+                  onClick={(e) => handleLinkClick(e, link)}
                   onMouseEnter={() => setHoveredLink(link.href)}
                   className="relative z-10 px-4 py-1.5 rounded-full text-sm transition-colors block"
                   style={{
@@ -74,8 +82,8 @@ export default function Navbar() {
                   {link.label}
                   {isActive && (
                     <motion.span
-                      layoutId="nav-active-dot"
-                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"
+                      layoutId="nav-active-indicator"
+                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-0.5 w-4 rounded-full"
                       style={{ backgroundColor: TEAL }}
                     />
                   )}
@@ -111,7 +119,7 @@ export default function Navbar() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    onClick={() => setOpen(false)}
+                    onClick={(e) => { handleLinkClick(e, link); setOpen(false) }}
                     className="block py-2 text-sm transition-colors"
                     style={{ color: pathname === link.href ? TEAL : 'rgba(255,255,255,0.7)' }}
                   >

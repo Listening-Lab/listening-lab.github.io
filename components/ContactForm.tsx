@@ -33,40 +33,40 @@ export default function ContactForm() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-gray-700">We welcome collaborations and contributions.</p>
-        <p className="text-gray-600 mt-1 text-sm">If you wish to contribute recordings to the Acoustic Map of New Zealand then please get in contact to discuss further.</p>
+        <p className="text-gray-300">We welcome collaborations and contributions.</p>
+        <p className="text-gray-400 mt-1 text-sm">If you wish to contribute recordings to the Acoustic Map of New Zealand then please get in contact to discuss further.</p>
       </div>
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid sm:grid-cols-2 gap-6">
         <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+          <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">Name</label>
           <input
             id="name" name="name" type="text" required
-            className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full bg-white/5 border border-white/15 text-white placeholder-gray-500 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+          <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">Email</label>
           <input
             id="email" name="email" type="email" required
-            className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full bg-white/5 border border-white/15 text-white placeholder-gray-500 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
       </div>
 
       <div>
-        <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-2">Subject</label>
+        <label htmlFor="subject" className="block text-sm font-medium text-gray-300 mb-2">Subject</label>
         <input
           id="subject" name="subject" type="text"
-          className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="w-full bg-white/5 border border-white/15 text-white placeholder-gray-500 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
       </div>
 
       <div>
-        <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">Message</label>
+        <label htmlFor="message" className="block text-sm font-medium text-gray-300 mb-2">Message</label>
         <textarea
           id="message" name="message" rows={6} required
-          className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+          className="w-full bg-white/5 border border-white/15 text-white placeholder-gray-500 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
         />
       </div>
 

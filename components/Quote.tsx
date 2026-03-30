@@ -16,21 +16,21 @@ export default async function Quote() {
           className="object-cover object-center"
         />
         {/* Dark overall tint */}
-        <div className="absolute inset-0 bg-ocean-dark/45" />
-        {/* Fade toward right */}
+        <div className="absolute inset-0 bg-ocean-dark/50" />
+        {/* Fade toward right — reaches solid well before centre so text sits on clean bg */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              'linear-gradient(to right, rgba(10,22,40,0.05) 0%, rgba(10,22,40,0.55) 65%, #0a1628 100%)',
+              'linear-gradient(to right, rgba(10,22,40,0.1) 0%, rgba(10,22,40,0.6) 55%, rgba(10,22,40,0.9) 75%, #0a1628 90%)',
           }}
         />
-        {/* Fade top & bottom */}
+        {/* Fade top & bottom — matches section bg exactly */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              'linear-gradient(to bottom, #0a1628 0%, transparent 18%, transparent 82%, #0a1628 100%)',
+              'linear-gradient(to bottom, #0a1628 0%, transparent 22%, transparent 78%, #0a1628 100%)',
           }}
         />
       </div>
@@ -45,8 +45,8 @@ export default async function Quote() {
             <span className="font-serif text-7xl leading-none text-brand-500 select-none self-end -mt-4">&rdquo;</span>
           </div>
           <div className="mt-6">
-            <p className="text-gray-400 text-sm tracking-widest uppercase">Author Name</p>
-            <p className="text-gray-500 text-sm mt-1">Title / Affiliation</p>
+            <p className="text-gray-400 text-sm tracking-widest uppercase">Dr Ben McEwen</p>
+            <p className="text-gray-500 text-sm mt-1">Researcher / Co-lead of the Listening Lab</p>
           </div>
         </AnimatedSection>
       </div>

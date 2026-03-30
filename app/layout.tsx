@@ -9,12 +9,12 @@ const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-playfa
 
 export const metadata: Metadata = {
   title: {
-    default: 'Listening Lab NZ',
-    template: '%s | Listening Lab NZ',
+    default: 'Listening Lab',
+    template: '%s | Listening Lab',
   },
   description: 'We are a multidisciplinary research group developing computational bioacoustic tools for conservation',
   openGraph: {
-    siteName: 'Listening Lab NZ',
+    siteName: 'Listening Lab',
     locale: 'en_NZ',
     type: 'website',
   },

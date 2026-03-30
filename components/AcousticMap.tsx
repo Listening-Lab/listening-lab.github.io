@@ -500,6 +500,67 @@ function initThree(
   leftEl.addEventListener('click', onLeftClick)
   window.addEventListener('mouseup', onLeftMouseUp)
 
+  // ── Left panel touch support ──────────────────────────────────────────
+  const onLeftTouchStart = (e: TouchEvent) => {
+    if (e.touches.length !== 1) return
+    isDragging = true; dragDist = 0
+    dragLast = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    // Update mouse position immediately so animateLeft's hover detection can
+    // run at least one frame before touchend fires, setting leftHoveredRi.
+    const touch = e.touches[0]
+    const rect = leftEl.getBoundingClientRect()
+    leftMouse.nx = (touch.clientX - rect.left) / rect.width - 0.5
+    leftMouse.ny = (touch.clientY - rect.top)  / rect.height - 0.5
+    leftMouse2D.x = leftMouse.nx * 2
+    leftMouse2D.y = -leftMouse.ny * 2
+  }
+
+  const onLeftTouchMove = (e: TouchEvent) => {
+    if (e.touches.length !== 1) return
+    e.preventDefault()
+    const touch = e.touches[0]
+    const rect = leftEl.getBoundingClientRect()
+    leftMouse.nx = (touch.clientX - rect.left) / rect.width - 0.5
+    leftMouse.ny = (touch.clientY - rect.top)  / rect.height - 0.5
+    leftMouse2D.x = leftMouse.nx * 2
+    leftMouse2D.y = -leftMouse.ny * 2
+    const dx = touch.clientX - dragLast.x, dy = touch.clientY - dragLast.y
+    dragDist += Math.abs(dx) + Math.abs(dy)
+    const visH = 2 * cam.curZ * Math.tan(leftCam.fov * Math.PI / 360)
+    const visW = visH * leftCam.aspect
+    panX = Math.max(-PAN_LIMIT_X, Math.min(PAN_LIMIT_X, panX - dx / rect.width  * visW))
+    panY = Math.max(-PAN_LIMIT_Y, Math.min(PAN_LIMIT_Y, panY + dy / rect.height * visH))
+    dragLast = { x: touch.clientX, y: touch.clientY }
+  }
+
+  const onLeftTouchEnd = (e: TouchEvent) => {
+    isDragging = false
+    if (dragDist > 8 || e.changedTouches.length !== 1) return
+    // Mirror the desktop click handler: use the hovered region that animateLeft
+    // has already computed from the touchstart position. Fall back to a direct
+    // raycast for very fast taps where no animation frame has run yet.
+    let targetRi = leftHoveredRi
+    if (targetRi < 0) {
+      const touch = e.changedTouches[0]
+      const rect = leftEl.getBoundingClientRect()
+      leftMouse2D.x =  ((touch.clientX - rect.left) / rect.width)  * 2 - 1
+      leftMouse2D.y = -((touch.clientY - rect.top)  / rect.height) * 2 + 1
+      leftRaycaster.setFromCamera(leftMouse2D, leftCam)
+      const hits = leftRaycaster.intersectObjects(regionHitMeshes.map(r => r.mesh))
+      targetRi = hits.length > 0 ? (regionHitMeshes.find(r => r.mesh === hits[0].object)?.ri ?? -1) : -1
+    }
+    if (targetRi >= 0) {
+      const cur = cb.getSelected()
+      const next = targetRi === cur ? -1 : targetRi
+      cb.onSelectRegion(next)
+      updateSelection(next)
+    }
+  }
+
+  leftEl.addEventListener('touchstart', onLeftTouchStart, { passive: true })
+  leftEl.addEventListener('touchmove',  onLeftTouchMove,  { passive: false })
+  leftEl.addEventListener('touchend',   onLeftTouchEnd,   { passive: true })
+
   function updateSelection(ri: number) {
     panX = 0; panY = 0   // reset pan on any selection change
     const sel = ri >= 0 ? ri : -1
@@ -630,6 +691,33 @@ function initThree(
   rightEl.addEventListener('mousemove', onRightMouseMove)
   rightEl.addEventListener('mouseleave', onRightMouseLeave)
 
+  // ── Right panel touch support — single tap triggers point hover/audio ──
+  let rightTouchStart = { x: 0, y: 0, time: 0 }
+  let rightTouchHoldTimer: ReturnType<typeof setTimeout> | null = null
+
+  const onRightTouchStart = (e: TouchEvent) => {
+    if (e.touches.length !== 1) return
+    rightTouchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() }
+  }
+
+  const onRightTouchEnd = (e: TouchEvent) => {
+    if (e.changedTouches.length !== 1) return
+    const touch = e.changedTouches[0]
+    const dx = touch.clientX - rightTouchStart.x
+    const dy = touch.clientY - rightTouchStart.y
+    // Only treat as tap if minimal movement and short duration
+    if (Math.sqrt(dx * dx + dy * dy) > 12 || Date.now() - rightTouchStart.time > 400) return
+    const rect = rightEl.getBoundingClientRect()
+    rightMouse2D.x =  ((touch.clientX - rect.left) / rect.width)  * 2 - 1
+    rightMouse2D.y = -((touch.clientY - rect.top)  / rect.height) * 2 + 1
+    // Auto-clear selection after 3 s so the user can scroll away cleanly
+    if (rightTouchHoldTimer) clearTimeout(rightTouchHoldTimer)
+    rightTouchHoldTimer = setTimeout(() => { rightMouse2D.set(-9999, -9999) }, 3000)
+  }
+
+  rightEl.addEventListener('touchstart', onRightTouchStart, { passive: true })
+  rightEl.addEventListener('touchend',   onRightTouchEnd,   { passive: true })
+
   // ── Audio playback ────────────────────────────────────────────────────
   type AudioEntry = { el: HTMLAudioElement; fadeTimer: ReturnType<typeof setInterval> | null }
   const activeAudio = new Map<number, AudioEntry>()
@@ -746,7 +834,12 @@ function initThree(
     rightCam.updateProjectionMatrix()
     rightRenderer.setSize(rightEl.clientWidth, rightEl.clientHeight)
   }
-  window.addEventListener('resize', onResize)
+  // Use ResizeObserver instead of window 'resize' so we also catch layout-driven
+  // size changes (e.g. the panel going from w-1/2 to full-width on mobile),
+  // which don't fire a window resize event.
+  const resizeObserver = new ResizeObserver(onResize)
+  resizeObserver.observe(leftEl)
+  resizeObserver.observe(rightEl)
 
   // expose updateSelection, setMuted, setPaused so React can call them
   ;(leftEl as any).__setPaused = (v: boolean) => {
@@ -763,13 +856,19 @@ function initThree(
     cancelAnimationFrame(leftAnimId)
     cancelAnimationFrame(rightAnimId)
     stopAllAudio()
-    window.removeEventListener('resize', onResize)
+    resizeObserver.disconnect()
     leftEl.removeEventListener('mousedown', onLeftMouseDown)
     leftEl.removeEventListener('mousemove', onLeftMouseMove)
     leftEl.removeEventListener('click', onLeftClick)
     window.removeEventListener('mouseup', onLeftMouseUp)
     rightEl.removeEventListener('mousemove', onRightMouseMove)
     rightEl.removeEventListener('mouseleave', onRightMouseLeave)
+    leftEl.removeEventListener('touchstart', onLeftTouchStart)
+    leftEl.removeEventListener('touchmove',  onLeftTouchMove)
+    leftEl.removeEventListener('touchend',   onLeftTouchEnd)
+    rightEl.removeEventListener('touchstart', onRightTouchStart)
+    rightEl.removeEventListener('touchend',   onRightTouchEnd)
+    if (rightTouchHoldTimer) clearTimeout(rightTouchHoldTimer)
     leftRenderer.dispose(); rightRenderer.dispose()
     if (leftEl.contains(leftRenderer.domElement)) leftEl.removeChild(leftRenderer.domElement)
     if (rightEl.contains(rightRenderer.domElement)) rightEl.removeChild(rightRenderer.domElement)
@@ -791,6 +890,17 @@ export default function AcousticMap() {
   const [dataRef, setDataRef] = useState<AppData | null>(null)
   const mutedRef = useRef(true)
   const [muted, setMuted] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
+  const [activePanel, setActivePanel] = useState<'map' | 'umap'>('map')
+  const [mapEngaged, setMapEngaged] = useState(false)
+  const [umapEngaged, setUmapEngaged] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   const toggleMute = () => {
     const next = !mutedRef.current
@@ -857,59 +967,128 @@ export default function AcousticMap() {
         </p>
       </div>
 
-      {/* Panel labels */}
-      <div className="flex text-xs tracking-widest uppercase text-white/30 px-6 mb-2">
-        <div className="w-1/2 text-center">Geographic — Aotearoa NZ</div>
-        <div className="w-1/2 text-center">
-          {selectedRegion ? `${selectedRegion.name} · PERCH v2 Embedding` : 'PERCH v2 Embedding Space'}
+      {/* Panel labels / mobile tabs */}
+      {isMobile ? (
+        <div className="flex justify-center gap-2 px-4 mb-3">
+          <button
+            onClick={() => setActivePanel('map')}
+            className={`text-xs tracking-widest uppercase rounded-full px-5 py-1.5 transition-colors ${activePanel === 'map' ? 'bg-white/20 text-white' : 'bg-white/5 text-white/40'}`}
+          >Map</button>
+          <button
+            onClick={() => setActivePanel('umap')}
+            className={`text-xs tracking-widest uppercase rounded-full px-5 py-1.5 transition-colors ${activePanel === 'umap' ? 'bg-white/20 text-white' : 'bg-white/5 text-white/40'}`}
+          >Point Map</button>
         </div>
-      </div>
-
-      {/* Divider line */}
-      <div className="relative flex" style={{ height: '76vh' }}>
-        <div ref={leftRef} className="w-1/2 h-full cursor-crosshair" />
-
-        {/* Vertical divider */}
-        <div className="absolute inset-y-0 left-1/2 w-px bg-white/10 pointer-events-none" />
-        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex items-center pointer-events-none z-10">
-          <div className="w-6 h-6 rounded-full bg-ocean-dark border border-white/20 flex items-center justify-center">
-            <div className="w-1.5 h-1.5 rounded-full bg-white/40" />
+      ) : (
+        <div className="flex text-xs tracking-widest uppercase text-white/30 px-6 mb-2">
+          <div className="w-1/2 text-center">Geographic — Aotearoa NZ</div>
+          <div className="w-1/2 text-center">
+            {selectedRegion ? `${selectedRegion.name} · PERCH v2 Embedding` : 'PERCH v2 Embedding Space'}
           </div>
         </div>
+      )}
 
-        <div ref={rightRef} className="w-1/2 h-full" />
+      {/* Panels */}
+      <div className={`relative ${isMobile ? '' : 'flex'}`} style={{ height: '76vh' }}>
+        {/* Left / Map panel — always in DOM so Three.js has a valid size */}
+        <div
+          ref={leftRef}
+          className={`cursor-crosshair ${isMobile ? 'absolute inset-0' : 'w-1/2 h-full'} transition-opacity duration-200${isMobile && activePanel !== 'map' ? ' opacity-0 pointer-events-none' : ''}`}
+        />
 
-        {/* Mute / unmute button — top-right of right panel */}
-        <button
-          onClick={toggleMute}
-          className="absolute top-3 right-3 z-20 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors"
-          title={muted ? 'Unmute audio' : 'Mute audio'}
-        >
-          {muted ? (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4 text-white/60">
-              <path d="M11 5 6 9H3v6h3l5 4V5z" />
-              <line x1="23" y1="9" x2="17" y2="15" />
-              <line x1="17" y1="9" x2="23" y2="15" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4 text-white">
-              <path d="M11 5 6 9H3v6h3l5 4V5z" />
-              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-              <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-            </svg>
-          )}
-        </button>
+        {/* Map engagement overlay (mobile only) */}
+        {isMobile && activePanel === 'map' && !mapEngaged && (
+          <div
+            className="absolute inset-0 z-30 flex items-center justify-center"
+            style={{ background: 'rgba(10,22,40,0.65)', backdropFilter: 'blur(6px)' }}
+            onClick={() => setMapEngaged(true)}
+          >
+            <div className="border border-white/20 rounded-2xl px-8 py-5 text-center bg-black/20">
+              <p className="text-white text-sm font-medium mb-1">Tap to explore the map</p>
+              <p className="text-white/50 text-xs">Drag to pan · tap a region to select</p>
+            </div>
+          </div>
+        )}
 
-        {/* Contribute button — overlaid at the divider, 1/3 from the bottom */}
-        <div className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none" style={{ bottom: '33%' }}>
+        {/* Vertical divider (desktop only) */}
+        {!isMobile && (
+          <>
+            <div className="absolute inset-y-0 left-1/2 w-px bg-white/10 pointer-events-none" />
+            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex items-center pointer-events-none z-10">
+              <div className="w-6 h-6 rounded-full bg-ocean-dark border border-white/20 flex items-center justify-center">
+                <div className="w-1.5 h-1.5 rounded-full bg-white/40" />
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Right / UMAP panel — always in DOM so Three.js has a valid size */}
+        <div
+          ref={rightRef}
+          className={`${isMobile ? 'absolute inset-0' : 'w-1/2 h-full'} transition-opacity duration-200${isMobile && activePanel !== 'umap' ? ' opacity-0 pointer-events-none' : ''}`}
+        />
+
+        {/* UMAP engagement overlay (mobile only) */}
+        {isMobile && activePanel === 'umap' && !umapEngaged && (
+          <div
+            className="absolute inset-0 z-30 flex items-center justify-center"
+            style={{ background: 'rgba(10,22,40,0.65)', backdropFilter: 'blur(6px)' }}
+            onClick={() => setUmapEngaged(true)}
+          >
+            <div className="border border-white/20 rounded-2xl px-8 py-5 text-center bg-black/20">
+              <p className="text-white text-sm font-medium mb-1">Tap to explore sounds</p>
+              <p className="text-white/50 text-xs">Tap a point to play · drag to orbit</p>
+            </div>
+          </div>
+        )}
+
+        {/* Mute / unmute button — visible on UMAP panel */}
+        {(!isMobile || activePanel === 'umap') && (
+          <button
+            onClick={toggleMute}
+            className="absolute top-3 right-3 z-20 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors"
+            title={muted ? 'Unmute audio' : 'Mute audio'}
+          >
+            {muted ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4 text-white/60">
+                <path d="M11 5 6 9H3v6h3l5 4V5z" />
+                <line x1="23" y1="9" x2="17" y2="15" />
+                <line x1="17" y1="9" x2="23" y2="15" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4 text-white">
+                <path d="M11 5 6 9H3v6h3l5 4V5z" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+              </svg>
+            )}
+          </button>
+        )}
+
+        {/* Contribute button — at divider on desktop, below panels on mobile */}
+        {!isMobile && (
+          <div className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none" style={{ bottom: '33%' }}>
+            <a
+              href="/contact"
+              className="pointer-events-auto bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-8 py-3 text-sm font-medium text-white hover:bg-white/20 transition-colors whitespace-nowrap"
+            >
+              Contribute to the Map
+            </a>
+          </div>
+        )}
+      </div>
+
+      {/* Contribute button — mobile, below panels */}
+      {isMobile && (
+        <div className="flex justify-center py-4">
           <a
             href="/contact"
-            className="pointer-events-auto bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-8 py-3 text-sm font-medium text-white hover:bg-white/20 transition-colors whitespace-nowrap"
+            className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-8 py-3 text-sm font-medium text-white hover:bg-white/20 transition-colors"
           >
             Contribute to the Map
           </a>
         </div>
-      </div>
+      )}
 
       {/* Loading / error */}
       {!loaded && !error && (
@@ -964,8 +1143,8 @@ export default function AcousticMap() {
       {/* Legend */}
       {loaded && !selectedRegion && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-wrap justify-center gap-x-4 gap-y-1 max-w-2xl px-4">
-          {dataRef?.regions.map((r) => (
-            <span key={r.id} className="flex items-center gap-1 text-xs text-gray-400">
+          {dataRef?.regions.map((r, i) => (
+            <span key={i} className="flex items-center gap-1 text-xs text-gray-400">
               <span className="w-2 h-2 rounded-full" style={{ background: r.color }} />
               {r.name}
             </span>
