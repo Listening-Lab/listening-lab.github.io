@@ -274,6 +274,7 @@ function initThree(
     onSelectRegion: (idx: number) => void
     getSelected: () => number
     getMuted: () => boolean
+    onContextLost: () => void
   }
 ): () => void {
 
@@ -595,10 +596,9 @@ function initThree(
 
   const leftClock = new THREE.Clock()
   let leftAnimId = 0
-  let paused = false
 
   const animateLeft = () => {
-    if (!paused) leftAnimId = requestAnimationFrame(animateLeft)
+    leftAnimId = requestAnimationFrame(animateLeft)
     const t = leftClock.getElapsedTime()
     leftMat.uniforms.uTime.value = t
 
@@ -650,6 +650,11 @@ function initThree(
   rightRenderer.setSize(rightEl.clientWidth, rightEl.clientHeight)
   rightRenderer.setClearColor(0x000000, 0)
   rightEl.appendChild(rightRenderer.domElement)
+
+  leftRenderer.domElement.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault()
+    cb.onContextLost()
+  }, false)
 
   const rightScene = new THREE.Scene()
   const rightCam = new THREE.PerspectiveCamera(58, rightEl.clientWidth / rightEl.clientHeight, 0.1, 100)
@@ -781,7 +786,7 @@ function initThree(
   const rightPointsObj = rightScene.children[0] as THREE.Points
 
   const animateRight = () => {
-    if (!paused) rightAnimId = requestAnimationFrame(animateRight)
+    rightAnimId = requestAnimationFrame(animateRight)
     const t = rightClock.getElapsedTime()
     rightMat.uniforms.uTime.value = t
 
@@ -854,12 +859,7 @@ function initThree(
   resizeObserver.observe(leftEl)
   resizeObserver.observe(rightEl)
 
-  // expose updateSelection, setMuted, setPaused so React can call them
-  ;(leftEl as any).__setPaused = (v: boolean) => {
-    if (paused === v) return
-    paused = v
-    if (!paused) { animateLeft(); animateRight() }
-  }
+  // expose updateSelection, setMuted so React can call them
   ;(leftEl as any).__updateSelection = updateSelection
   ;(rightEl as any).__setMuted = (m: boolean) => {
     activeAudio.forEach(entry => { entry.el.muted = m })
@@ -893,9 +893,9 @@ function initThree(
 export default function AcousticMap() {
   const leftRef     = useRef<HTMLDivElement>(null)
   const rightRef    = useRef<HTMLDivElement>(null)
-  const sectionRef  = useRef<HTMLElement>(null)
   const selectedRef = useRef(-1)
 
+  const [mountKey, setMountKey] = useState(0)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null)
@@ -928,47 +928,56 @@ export default function AcousticMap() {
     let unmounted = false
     let cleanup: (() => void) | null = null
 
+    const tryInit = (data: AppData) => {
+      const left = leftRef.current, right = rightRef.current
+      if (!left || !right) return
+      const callbacks = {
+        onHoverRegion: (name: string | null) => setHoveredRegion(name),
+        onHoverPoint: (rec: Recording | null) => {
+          if (!rec) { setHoveredPoint(null); return }
+          setHoveredPoint({
+            name: rec.englishName || `${rec.genus} ${rec.species}`,
+            region: rec.regionIdx >= 0 ? data.regions[rec.regionIdx].name : 'Unassigned',
+          })
+        },
+        onSelectRegion: (idx: number) => {
+          selectedRef.current = idx
+          setSelectedIdx(idx)
+        },
+        getSelected: () => selectedRef.current,
+        getMuted: () => mutedRef.current,
+        onContextLost: () => setMountKey(k => k + 1),
+      }
+      if (left.clientWidth === 0 || left.clientHeight === 0) {
+        const ro = new ResizeObserver(() => {
+          if (left.clientWidth > 0 && left.clientHeight > 0) {
+            ro.disconnect()
+            if (!unmounted) { cleanup = initThree(data, left, right, callbacks); setLoaded(true) }
+          }
+        })
+        ro.observe(left)
+        return
+      }
+      cleanup = initThree(data, left, right, callbacks)
+      setLoaded(true)
+    }
+
     loadData()
       .then(data => {
         if (unmounted || !leftRef.current || !rightRef.current) return
         setDataRef(data)
-        cleanup = initThree(data, leftRef.current, rightRef.current, {
-          onHoverRegion: name => setHoveredRegion(name),
-          onHoverPoint: rec => {
-            if (!rec) { setHoveredPoint(null); return }
-            setHoveredPoint({
-              name: rec.englishName || `${rec.genus} ${rec.species}`,
-              region: rec.regionIdx >= 0 ? data.regions[rec.regionIdx].name : 'Unassigned',
-            })
-          },
-          onSelectRegion: idx => {
-            selectedRef.current = idx
-            setSelectedIdx(idx)
-          },
-          getSelected: () => selectedRef.current,
-          getMuted: () => mutedRef.current,
-        })
-        setLoaded(true)
+        tryInit(data)
       })
       .catch(err => setError(err.message))
 
     return () => { unmounted = true; cleanup?.() }
   }, [])
 
-  useEffect(() => {
-    if (!sectionRef.current) return
-    const obs = new IntersectionObserver(
-      ([entry]) => { (leftRef.current as any)?.__setPaused?.(!entry.isIntersecting) },
-      { threshold: 0 }
-    )
-    obs.observe(sectionRef.current)
-    return () => obs.disconnect()
-  }, [])
 
   const selectedRegion = dataRef && selectedIdx >= 0 ? dataRef.regions[selectedIdx] : null
 
   return (
-    <section ref={sectionRef} className="relative w-full bg-ocean-dark text-white overflow-hidden" style={{ minHeight: '100vh' }}>
+    <section key={mountKey} className="relative w-full bg-ocean-dark text-white overflow-hidden" style={{ minHeight: '100vh' }}>
       {/* Header */}
       <div className="relative z-10 pt-24 pb-4 text-center px-4">
         <p className="text-brand-100 text-xs tracking-widest uppercase mb-2">Interactive</p>
@@ -1060,7 +1069,7 @@ export default function AcousticMap() {
         {(!isMobile || activePanel === 'umap') && (
           <button
             onClick={toggleMute}
-            className="absolute top-3 right-3 z-20 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors"
+            className="absolute top-3 left-[calc(50%-1.125em)] z-20 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors"
             title={muted ? 'Unmute audio' : 'Mute audio'}
           >
             {muted ? (

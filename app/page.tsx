@@ -3,12 +3,9 @@ import HeroV4 from '@/components/HeroV4'
 import AudioShowcase from '@/components/AudioShowcase'
 import Quote from '@/components/Quote'
 import About from '@/components/About'
+import WaveBreak from '@/components/WaveBreak'
 
-// Three.js components are lazy-loaded so they don't block the initial JS bundle.
-// Without this, the browser waits for ~600 KB of Three.js to compile before
-// any page content renders (visible as a blank page on cold dev-server starts).
 const AcousticMap = dynamic(() => import('@/components/AcousticMap'), { ssr: false })
-const RegionMap = dynamic(() => import('@/components/Map'), { ssr: false })
 
 export default function HomePage() {
   return (
@@ -18,9 +15,11 @@ export default function HomePage() {
         <AcousticMap />
       </div>
       <AudioShowcase />
+      <WaveBreak topColor="#0a1628" bottomColor="rgb(7 17 32)" />
       <div id="about">
         <About />
       </div>
+      <WaveBreak topColor="rgb(7 17 32)" bottomColor="#0a1628" />
       <Quote />
     </>
   )

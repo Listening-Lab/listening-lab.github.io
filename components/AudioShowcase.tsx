@@ -4,8 +4,8 @@ import { motion } from 'framer-motion'
 import AnimatedSection from './AnimatedSection'
 
 const soundscapes = [
-  { label: 'Tui', location: 'Lake Tikitapu', duration: '3:03', color: '#0ea5e9', src: 'https://xeno-canto.org/857958/download' },
-  { label: 'Bellbird (Kōmako)',   location: 'Kahurangi National Park',   duration: '1:35', color: '#6366f1', src: 'https://xeno-canto.org/842925/download' },
+  { label: 'Tui', location: 'Lake Tikitapu', duration: '3:03', color: '#0ea5e9', src: 'https://xeno-canto.org/857958/download', image: "images/birds/andrea-lightfoot-0MU2XZbkGZ8-unsplash-tui.jpg" },
+  { label: 'Bellbird (Kōmako)',   location: 'Kahurangi National Park',   duration: '1:35', color: '#6366f1', src: 'https://xeno-canto.org/842925/download', image: "images/birds/tonia-kraakman-IriMHaXnyRQ-unsplash-bellbird.jpg" },
   { label: 'Little Spotted Kiwi (Kiwi Pukupuku)',  location: 'Kapiti Island',       duration: '0:51', color: '#10b981', src: 'https://xeno-canto.org/88143/download' },
 ]
 
@@ -73,6 +73,12 @@ export default function AudioShowcase() {
           {soundscapes.map((s, i) => (
             <AnimatedSection key={s.label} delay={i * 0.1}>
               <div className="flex items-center gap-6 bg-white/5 hover:bg-white/10 rounded-2xl px-6 py-5 transition-colors group">
+                {s.image ?
+                  <div className="w-12 h-12 rounded-2xl overflow-hidden">
+                  <img src={s.image}/>
+                </div> : null
+                }
+                
                 <button
                   onClick={() => setPlaying(playing === i ? null : i)}
                   className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center flex-shrink-0 hover:border-white/60 transition-colors"

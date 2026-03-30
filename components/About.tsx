@@ -17,11 +17,11 @@ const pillars = [
     desc:
       'Combining deep ecological knowledge with modern data science to turn terabytes of field recordings into meaningful biodiversity metrics.',
   },
-  {
-    title: 'Conservation-ready insights',
-    desc:
-      'Translating acoustic indices and species detections into actionable evidence for land managers, iwi, and conservation agencies.',
-  },
+  // {
+  //   title: 'Conservation-ready insights',
+  //   desc:
+  //     'Translating acoustic indices and species detections into actionable evidence for land managers, iwi, and conservation agencies.',
+  // },
 ]
 
 export default function About() {
@@ -40,15 +40,12 @@ export default function About() {
             </h2>
             <p className="text-gray-300 leading-relaxed mb-6">
               The Listening Lab is a multidisciplinary research group developing computational
-              bioacoustic tools for conservation. We bring together ecologists, engineers, and
-              data scientists to build the methods and infrastructure needed to monitor New
+              bioacoustic tools for conservation. We build the methods and infrastructure needed to monitor New
               Zealand's biodiversity through sound.
             </p>
             <p className="text-gray-400 leading-relaxed mb-10">
-              Acoustic monitoring lets us listen continuously — day and night, across seasons —
-              without disturbing the species we study. By combining passive recording technology
-              with automated analysis, we make it possible to track wildlife populations at a
-              scale that was previously out of reach.
+              By combining passive recording technology with automated analysis, we make it possible to track 
+              wildlife populations at a scale that was previously out of reach.
             </p>
             <Link
               href="/about"
