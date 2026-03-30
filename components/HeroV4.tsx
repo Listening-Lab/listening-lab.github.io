@@ -97,7 +97,7 @@ export default function HeroV4() {
           transition={{ duration: 0.65, delay: 0.12 }}
           className="font-serif text-5xl md:text-[3.2rem] lg:text-6xl leading-tight mb-6"
         >
-          Sound is how<br />we Understand Nature.
+          Sound is how we<br /> Understand Nature.
         </motion.h1>
 
         <motion.div

@@ -41,7 +41,7 @@ export default function Navbar() {
         atTop ? 'bg-transparent' : 'bg-ocean-dark/95 backdrop-blur'
       }`}
     >
-      <nav className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <nav className="w-full px-6 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center">
           <Image
             src="/assets/logo_transparent.png"

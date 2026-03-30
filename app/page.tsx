@@ -8,6 +8,7 @@ import About from '@/components/About'
 // Without this, the browser waits for ~600 KB of Three.js to compile before
 // any page content renders (visible as a blank page on cold dev-server starts).
 const AcousticMap = dynamic(() => import('@/components/AcousticMap'), { ssr: false })
+const RegionMap = dynamic(() => import('@/components/Map'), { ssr: false })
 
 export default function HomePage() {
   return (

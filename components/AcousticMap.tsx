@@ -574,7 +574,7 @@ function initThree(
       const isSelected = groupRi === sel
       const showAll = sel < 0
       group.fillMats.forEach(m => { m.opacity = showAll ? 0.10 : isSelected ? 0.20 : 0.04 })
-      group.outlineMats.forEach(m => { m.opacity = showAll ? 0.55 : isSelected ? 0.85 : 0.12 })
+      group.outlineMats.forEach(m => { m.opacity = showAll ? 0.55 : isSelected ? 0.85 : 0.20 })
     })
 
     // camera zoom
@@ -723,11 +723,9 @@ function initThree(
   let clickedAudioIdx = -1
 
   const onRightClick = () => {
-    if (lastHoveredIdx < 0) return
-    if (clickedAudioIdx === lastHoveredIdx) {
-      // same point — toggle off
-      stopAudio(clickedAudioIdx)
-      clickedAudioIdx = -1
+    if (lastHoveredIdx < 0) {
+      // clicked empty space — stop whatever is playing
+      if (clickedAudioIdx >= 0) { stopAudio(clickedAudioIdx); clickedAudioIdx = -1 }
     } else {
       if (clickedAudioIdx >= 0) stopAudio(clickedAudioIdx)
       clickedAudioIdx = lastHoveredIdx

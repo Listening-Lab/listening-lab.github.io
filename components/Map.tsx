@@ -204,7 +204,7 @@ function initThree(
   const rc = new THREE.Color(), sc = new THREE.Color()
 
   recordings.forEach((rec, i) => {
-    rc.set(rec.regionIdx >= 0 ? regions[rec.regionIdx].color : '#888888')
+    rc.set(rec.regionIdx >= 0 ? regions[rec.regionIdx].color : '#e6e6e6')
     sc.set(speciesColors[rec.speciesIdx] ?? '#ffffff')
     regionColArr[i*3]=rc.r; regionColArr[i*3+1]=rc.g; regionColArr[i*3+2]=rc.b
     speciesColArr[i*3]=sc.r; speciesColArr[i*3+1]=sc.g; speciesColArr[i*3+2]=sc.b
@@ -288,7 +288,7 @@ function initThree(
       const isSelected = groupRi === sel
       const showAll = sel < 0
       group.fillMats.forEach((m: THREE.MeshBasicMaterial)   => { m.opacity = showAll ? 0.10 : isSelected ? 0.20 : 0.04 })
-      group.outlineMats.forEach((m: THREE.LineBasicMaterial) => { m.opacity = showAll ? 0.55 : isSelected ? 0.85 : 0.12 })
+      group.outlineMats.forEach((m: THREE.LineBasicMaterial) => { m.opacity = showAll ? 0.55 : isSelected ? 0.85 : 0.20 })
     })
 
     if (sel >= 0) {
