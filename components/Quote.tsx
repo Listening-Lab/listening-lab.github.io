@@ -4,6 +4,8 @@ import Image from 'next/image'
 
 export default async function Quote() {
 
+    const TEAL = '#4ecdc4'
+
     return (
     <section className="relative py-24 bg-ocean-dark overflow-hidden">
 
@@ -38,11 +40,11 @@ export default async function Quote() {
       <div className="relative z-10 max-w-3xl mx-auto px-6 text-center">
         <AnimatedSection>
           <div className="flex flex-col">
-            <span className="font-serif text-7xl leading-none text-brand-500 select-none self-start">&ldquo;</span>
+            <span className="font-serif text-7xl leading-none select-none self-start" style={{ color: TEAL }}>&ldquo;</span>
             <p className="font-serif text-2xl md:text-3xl text-white leading-relaxed -mt-4">
               The sounds of nature, and the absence of it, are a powerful lens through which to monitor biodiversity.
             </p>
-            <span className="font-serif text-7xl leading-none text-brand-500 select-none self-end -mt-4">&rdquo;</span>
+            <span className="font-serif text-7xl leading-none select-none self-end mt-2" style={{ color: TEAL }}>&rdquo;</span>
           </div>
           <div className="mt-6">
             <p className="text-gray-400 text-sm tracking-widest uppercase">Dr Ben McEwen</p>

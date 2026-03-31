@@ -15,11 +15,11 @@ export default function HomePage() {
         <AcousticMap />
       </div>
       <AudioShowcase />
-      <WaveBreak topColor="#0a1628" bottomColor="rgb(7 17 32)" />
+      {/* <WaveBreak topColor="#0a1628" bottomColor="rgb(7 17 32)" /> */}
       <div id="about">
         <About />
       </div>
-      <WaveBreak topColor="rgb(7 17 32)" bottomColor="#0a1628" />
+      {/* <WaveBreak topColor="rgb(7 17 32)" bottomColor="#0a1628" /> */}
       <Quote />
     </>
   )

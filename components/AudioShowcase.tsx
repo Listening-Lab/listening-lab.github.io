@@ -5,8 +5,8 @@ import AnimatedSection from './AnimatedSection'
 
 const soundscapes = [
   { label: 'Tui', location: 'Lake Tikitapu', duration: '3:03', color: '#0ea5e9', src: 'https://xeno-canto.org/857958/download', image: "images/birds/andrea-lightfoot-0MU2XZbkGZ8-unsplash-tui.jpg" },
-  { label: 'Bellbird (Kōmako)',   location: 'Kahurangi National Park',   duration: '1:35', color: '#6366f1', src: 'https://xeno-canto.org/842925/download', image: "images/birds/tonia-kraakman-IriMHaXnyRQ-unsplash-bellbird.jpg" },
-  { label: 'Little Spotted Kiwi (Kiwi Pukupuku)',  location: 'Kapiti Island',       duration: '0:51', color: '#10b981', src: 'https://xeno-canto.org/88143/download' },
+  { label: 'Bellbird (Kōmako)',   location: 'Kahurangi National Park', duration: '1:35', color: '#6366f1', src: 'https://xeno-canto.org/842925/download', image: "images/birds/tonia-kraakman-IriMHaXnyRQ-unsplash-bellbird.jpg" },
+  { label: 'Kea',  location: "Authur's Pass", duration: '0:05', color: '#10b981', src: 'https://xeno-canto.org/405514/download', image: "images/birds/pablo-heimplatz-PSF2RhUBORs-unsplash-kea.jpg"},
 ]
 
 function WaveformBars({ playing, color }: { playing: boolean; color: string }) {

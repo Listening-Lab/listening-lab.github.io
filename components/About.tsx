@@ -1,6 +1,8 @@
 import AnimatedSection from './AnimatedSection'
 import Link from 'next/link'
 
+const TEAL = '#4ecdc4'
+
 const pillars = [
   {
     title: 'National-scale monitoring',
@@ -32,7 +34,7 @@ export default function About() {
 
           {/* ── Left: identity & mission ── */}
           <AnimatedSection>
-            <p className="text-brand-500 text-xs tracking-widest uppercase mb-4 font-medium">
+            <p className="text-xs tracking-widest uppercase mb-4 font-medium" style={{ color: TEAL }}>
               Who we are
             </p>
             <h2 className="font-serif text-4xl md:text-5xl text-white leading-tight mb-6">
@@ -58,14 +60,14 @@ export default function About() {
           {/* ── Right: aims ── */}
           <div className="space-y-8">
             <AnimatedSection>
-              <p className="text-brand-500 text-xs tracking-widest uppercase mb-6 font-medium">
+              <p className="text-xs tracking-widest uppercase mb-6 font-medium" style={{ color: TEAL }}>
                 Our aims
               </p>
             </AnimatedSection>
             {pillars.map((pillar, i) => (
               <AnimatedSection key={pillar.title} delay={i * 0.1}>
                 <div className="flex gap-5">
-                  <div className="mt-1 flex-shrink-0 w-0.5 self-stretch bg-brand-500/40 rounded-full" />
+                  <div className="mt-1 flex-shrink-0 w-0.5 self-stretch rounded-full" style={{ backgroundColor: `${TEAL}66` }} />
                   <div>
                     <h3 className="font-serif text-lg text-white mb-1">{pillar.title}</h3>
                     <p className="text-gray-400 text-sm leading-relaxed">{pillar.desc}</p>
