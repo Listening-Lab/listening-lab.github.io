@@ -4,9 +4,15 @@ import { getAllPosts, getPostBySlug } from '@/lib/posts'
 import { MDXRemote } from 'next-mdx-remote/rsc'
 import { format } from 'date-fns'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
+import MapClient from '@/components/MapClient'
+
+const AcousticMap = dynamic(() => import('@/components/AcousticMap'))
+
+const mdxComponents = { AcousticMap, Map: MapClient }
 
 interface Props {
-  params: { slug: string }
+  params: Promise<{ slug: string }>
 }
 
 export async function generateStaticParams() {
@@ -15,13 +21,15 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const post = await getPostBySlug(params.slug)
+  const { slug } = await params
+  const post = await getPostBySlug(slug)
   if (!post) return {}
   return { title: post.title, description: post.excerpt }
 }
 
 export default async function BlogPostPage({ params }: Props) {
-  const post = await getPostBySlug(params.slug)
+  const { slug } = await params
+  const post = await getPostBySlug(slug)
   if (!post) notFound()
 
   return (
@@ -52,7 +60,7 @@ export default async function BlogPostPage({ params }: Props) {
       </header>
 
       <div className="prose-blog">
-        <MDXRemote source={post.content} />
+        <MDXRemote source={post.content} components={mdxComponents} />
       </div>
     </article>
   )

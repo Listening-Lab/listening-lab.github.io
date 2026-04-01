@@ -21,13 +21,31 @@ const team = [
     role: 'Co-lead | Professor',
     bio: '',
     initials: 'SG',
-  },
-    {
-    name: 'Dr. Tadeu Siqueira',
-    role: '',
+  }
+]
+
+const collaborators = [
+  {
+    name: 'Isaac Cone',
+    role: 'Summer Student',
     bio: '',
-    initials: 'TS',
+    initials: 'IC',
   },
+]
+
+const alumi = [
+  {
+    name: 'Isaac Cone',
+    role: 'Summer Student',
+    bio: '',
+    initials: 'IC',
+  },
+  {
+    name: 'Mikayla Franco',
+    role: 'Summer Student',
+    bio: '',
+    initials: 'MF',
+  }
 ]
 
 export default function TeamPage() {

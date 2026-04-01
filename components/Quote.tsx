@@ -2,7 +2,7 @@ import AnimatedSection from './AnimatedSection'
 import Image from 'next/image'
 
 
-export default async function Quote() {
+export default function Quote() {
 
     const TEAL = '#4ecdc4'
 

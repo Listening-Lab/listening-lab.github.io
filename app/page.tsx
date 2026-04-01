@@ -1,3 +1,4 @@
+'use client'
 import dynamic from 'next/dynamic'
 import HeroV4 from '@/components/HeroV4'
 import AudioShowcase from '@/components/AudioShowcase'
