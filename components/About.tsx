@@ -15,9 +15,9 @@ const pillars = [
       'Building open-source machine learning models and signal-processing pipelines that automate species identification from large audio archives.',
   },
   {
-    title: 'Ecology meets data science',
+    title: 'Ecology & data science',
     desc:
-      'Combining deep ecological knowledge with modern data science to turn terabytes of field recordings into meaningful biodiversity metrics.',
+      'Combining ecology with modern data science to turn terabytes of field recordings into meaningful biodiversity metrics.',
   },
   // {
   //   title: 'Conservation-ready insights',

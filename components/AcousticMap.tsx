@@ -908,6 +908,7 @@ export default function AcousticMap() {
   const [activePanel, setActivePanel] = useState<'map' | 'umap'>('map')
   const [mapEngaged, setMapEngaged] = useState(false)
   const [umapEngaged, setUmapEngaged] = useState(false)
+  const [legendOpen, setLegendOpen] = useState(false)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -1101,15 +1102,40 @@ export default function AcousticMap() {
         )}
       </div>
 
-      {/* Contribute button — mobile, below panels */}
+      {/* Mobile: legend (collapsible) + contribute button — below panels */}
       {isMobile && (
-        <div className="flex justify-center py-4">
-          <a
-            href="/contact"
-            className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-8 py-3 text-sm font-medium text-white hover:bg-white/20 transition-colors"
-          >
-            Contribute to the Map
-          </a>
+        <div className="px-4 pb-6 pt-2">
+          {loaded && !selectedRegion && (
+            <div className="mb-4 flex flex-col items-center">
+              <button
+                onClick={() => setLegendOpen(o => !o)}
+                className="flex items-center gap-2 text-xs tracking-widest uppercase text-white/50 hover:text-white/80 transition-colors mb-2"
+              >
+                <span>Legend</span>
+                <svg className={`w-3 h-3 transition-transform ${legendOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {legendOpen && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 pl-1">
+                  {dataRef?.regions.map((r, i) => (
+                    <span key={i} className="flex items-center gap-1.5 text-xs text-gray-400">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: r.color }} />
+                      {r.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex justify-center">
+            <a
+              href="/contact"
+              className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-8 py-3 text-sm font-medium text-white hover:bg-white/20 transition-colors"
+            >
+              Contribute to the Map
+            </a>
+          </div>
         </div>
       )}
 
@@ -1163,8 +1189,8 @@ export default function AcousticMap() {
         </div>
       )}
 
-      {/* Legend */}
-      {loaded && !selectedRegion && (
+      {/* Legend — desktop only (mobile legend is in normal flow below panels) */}
+      {loaded && !selectedRegion && !isMobile && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-wrap justify-center gap-x-4 gap-y-1 max-w-2xl px-4">
           {dataRef?.regions.map((r, i) => (
             <span key={i} className="flex items-center gap-1 text-xs text-gray-400">

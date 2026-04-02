@@ -4,6 +4,7 @@ import HeroV4 from '@/components/HeroV4'
 import AudioShowcase from '@/components/AudioShowcase'
 import Quote from '@/components/Quote'
 import About from '@/components/About'
+import CoreTeam from '@/components/CoreTeam'
 import WaveBreak from '@/components/WaveBreak'
 
 const AcousticMap = dynamic(() => import('@/components/AcousticMap'), { ssr: false })
@@ -20,6 +21,7 @@ export default function HomePage() {
       <div id="about">
         <About />
       </div>
+      <CoreTeam />
       {/* <WaveBreak topColor="rgb(7 17 32)" bottomColor="#0a1628" /> */}
       <Quote />
     </>

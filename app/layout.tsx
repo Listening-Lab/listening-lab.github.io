@@ -14,6 +14,9 @@ export const metadata: Metadata = {
     template: '%s | Listening Lab',
   },
   description: 'We are a multidisciplinary research group developing computational bioacoustic tools for conservation',
+  icons: {
+    icon: '/assets/favicon.ico',
+  },
   openGraph: {
     siteName: 'Listening Lab',
     locale: 'en_NZ',
