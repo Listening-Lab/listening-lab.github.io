@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
 @layer base {
   :root {
     --font-inter: 'Inter', sans-serif;
@@ -22,5 +32,10 @@
     @apply prose prose-lg prose-gray max-w-none
       prose-headings:font-serif prose-headings:text-ocean-dark
       prose-a:text-brand-600 prose-a:no-underline hover:prose-a:underline;
+  }
+
+  .prose-invert {
+    @apply prose-headings:text-white prose-p:text-gray-300 prose-a:text-[#4ecdc4] 
+      prose-strong:text-white prose-blockquote:text-gray-300 prose-blockquote:border-[#4ecdc4] prose-li:text-gray-300;
   }
 }

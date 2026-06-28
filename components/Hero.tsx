@@ -60,16 +60,10 @@ export default function Hero() {
           className="flex flex-wrap justify-center gap-4"
         >
           <Link
-            href="/research"
+            href="/#research"
             className="bg-white text-ocean-dark px-8 py-3 rounded-full font-medium hover:bg-brand-50 transition-colors"
           >
-            Our Research
-          </Link>
-          <Link
-            href="/blog"
-            className="border border-white/40 px-8 py-3 rounded-full hover:bg-white/10 transition-colors"
-          >
-            Read the Blog
+            Explore Our Research
           </Link>
         </motion.div>
       </div>

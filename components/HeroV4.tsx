@@ -56,7 +56,7 @@ export default function HeroV4() {
       />
 
       {/* ── Right: zoomed NZ map ── */}
-      <div className="absolute right-0 top-0 w-[62%] h-full pointer-events-none">
+      <div className="absolute right-0 top-0 w-full h-full pointer-events-none">
         <RegionMap selectedRegion="Manawatu-Wanganui" className="opacity-75"/>
       </div>
 
@@ -106,36 +106,20 @@ export default function HeroV4() {
           transition={{ duration: 0.55, delay: 0.48 }}
           className="flex flex-wrap gap-4"
         >
-          <button
-            onClick={() => document.getElementById('acoustic-map')?.scrollIntoView({ behavior: 'smooth' })}
+          <Link
+            href="/#about"
             className="bg-white text-ocean-dark px-8 py-3 rounded-full font-medium hover:bg-brand-50 transition-colors"
           >
-            Explore the Map
-          </button>
+            Who We Are
+          </Link>
           <Link
-            href="/blog"
-            className="border border-white/40 px-8 py-3 rounded-full hover:bg-white/10 transition-colors"
+            href="/#research"
+            className="bg-white/10 text-white border border-white/20 px-8 py-3 rounded-full font-medium hover:bg-white/20 transition-colors"
           >
-            Read the Blog
+            Explore Our Research
           </Link>
         </motion.div>
       </div>
-
-      {/* ── Scroll indicator ── */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.3 }}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30"
-      >
-        <motion.div
-          animate={{ y: [0, 8, 0] }}
-          transition={{ repeat: Infinity, duration: 1.5 }}
-          className="w-5 h-8 border-2 border-white/30 rounded-full flex justify-center pt-1.5"
-        >
-          <div className="w-1 h-2 bg-white/50 rounded-full" />
-        </motion.div>
-      </motion.div>
     </section>
   )
 }

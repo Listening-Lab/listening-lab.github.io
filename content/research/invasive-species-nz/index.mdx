@@ -1,0 +1,45 @@
+---
+title: Invasive Species NZ
+date: 2024-06-01
+author: The Listening Lab
+excerpt: The world's first open field dataset of Common Brushtail Possum vocalisations.
+image: /images/our-work/invasive-species-nz/possum_stub.jpg
+tags: [Mammal, Datasets, Aotearoa]
+---
+
+### Field data of Common Brushtail Possum (*Trichosurus vulpecula*) vocalisations
+
+This dataset contains field recordings of the Common Brushtail Possum, an ecologically destructive invasive mammalian predator in New Zealand. Designed to aid automated pest monitoring networks, it represents a benchmark dataset for detecting sparse nocturnal animal vocalisations amidst heavy environmental confounding noise.
+
+[**Download the Dataset on Kaggle →**](https://www.kaggle.com/datasets/0f51f43c1b9340d2180656990e32532a3e87afc8520f153111b6ba39ebcad073)
+
+---
+
+### Dataset Structure
+
+The core dataset contains 5-second audio segments (`.WAV`) downsampled to **16 kHz**, alongside the raw uncompressed field recordings:
+
+* **Training Set:** 3,000 segments balanced between verified possum vocalisations (1,062) and hard false-positives (1,938).
+* **Validation Set:** 500 segments evenly split between possum vocalisations (255) and environmental noise (245).
+* **Raw Field Audio:** 1,236 continuous 5-minute parent recordings sampled at **48 kHz**.
+
+#### Ground Truth & Filenames
+
+Filenames follow the strict temporal mapping `YYYYMMDD_HHMMSS_RX.WAV`:
+* `20220607_003000` defines the capture timestamp (e.g., 3:00 AM on 7 June 2022).
+* `R0` denotes the specific segment index sliced from the 5-minute parent audio file.
+* Ground truth binary classes: `possum` or `false-positive`.
+
+*Note: The `false-positive` class aggregates diverse real-world ecological confounders including rain, wind gusts, highway traffic, sheep 🐑, and native avifauna.*
+
+---
+
+### Acknowledgements & Collaborations
+
+This dataset was made possible through the financial support of **Predator Free 2050 Limited** (Capabilities Development Funding) and the Forest & Bird Stocker Scholarship. We thank our collaborators at the **Cacophony Project** and **Manaaki Whenua – Landcare Research** for their support, alongside summer research scholars Mikayla Franco, Isaac Cone, and Kaspar Soltero.
+
+#### Interested in expanding this dataset?
+
+Current annotations support binary `{possum, noise}` tasks. Work is required to extend annotation specificity to sub-classes (e.g. categorising distinct possum call types or specific noise sources). Get in touch if your group is interested in collaborating on multi-class labels.
+
+*Dataset labels were generated using our open-source [Listening Lab Annotator](https://github.com/Listening-Lab/Annotator).*
