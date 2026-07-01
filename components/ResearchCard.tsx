@@ -35,7 +35,7 @@ export default function ResearchCard({ title, excerpt, slug, date, tags }: Resea
         <div className="flex flex-col h-full">
           <div className="flex items-center justify-between mb-4">
             <span className="text-xs font-medium tracking-widest uppercase" style={{ color: TEAL }}>
-              {date}
+              Updated {date}
             </span>
             <div className="flex gap-2">
               {tags.slice(0, 2).map(tag => (

@@ -35,7 +35,9 @@
   }
 
   .prose-invert {
-    @apply prose-headings:text-white prose-p:text-gray-300 prose-a:text-[#4ecdc4] 
-      prose-strong:text-white prose-blockquote:text-gray-300 prose-blockquote:border-[#4ecdc4] prose-li:text-gray-300;
+    @apply prose-headings:text-white prose-p:text-gray-300 prose-a:text-[#4ecdc4]
+      prose-strong:text-white prose-blockquote:text-gray-300 prose-blockquote:border-[#4ecdc4]
+      prose-li:text-gray-300
+      prose-code:text-white prose-code:bg-white/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:font-normal prose-code:rounded prose-code:before:content-none prose-code:after:content-none;
   }
 }

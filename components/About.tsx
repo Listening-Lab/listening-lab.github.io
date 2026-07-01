@@ -7,7 +7,7 @@ const pillars = [
   {
     title: 'National-scale monitoring',
     desc:
-      'Deploying passive acoustic recorder networks across New Zealand\'s forests, wetlands, and coastlines to track biodiversity change over time.',
+      'Deploying passive acoustic recorder networks across Aotearoa New Zealand\'s forests, wetlands, and coastlines to track biodiversity change over time.',
   },
   {
     title: 'Computational bioacoustic tools',

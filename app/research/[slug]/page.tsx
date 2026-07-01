@@ -42,7 +42,7 @@ export default async function ResearchDetail({ params }: Props) {
         {!item.hideHeader && (
           <header className="mb-16">
             <time className="text-sm text-gray-400 tracking-wide uppercase">
-              {format(new Date(item.date), 'MMMM d, yyyy')}
+              Last updated: {format(new Date(item.date), 'MMMM d, yyyy')}
             </time>
             <h1 className="font-serif text-5xl md:text-6xl mt-4 mb-6 leading-tight">
               {item.title}

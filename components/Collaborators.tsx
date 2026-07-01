@@ -1,0 +1,75 @@
+import Image from 'next/image'
+import AnimatedSection from './AnimatedSection'
+
+const TEAL = '#4ecdc4'
+
+const people = [
+  { name: 'Dr Tadeu Siqueira', role: 'Visiting Scholar, Univ. of Canterbury', focus: 'Metacommunity Ecology, Freshwater Biodiversity', mark: 'TS', photo: undefined as string | undefined },
+  { name: 'Prof Jim Briskie', role: 'Professor, Biological Sciences', focus: 'Avian Reproductive Behaviour, Conservation', mark: 'JB', photo: undefined as string | undefined },
+  { name: 'A/Prof Andrew Bainbridge-Smith', role: 'Assoc. Professor, CSSE', focus: 'Retinal Imaging, Digital Logical Circuits', mark: 'AB', photo: undefined as string | undefined },
+  { name: 'Prof Richard Green', role: 'Professor, CSSE', focus: 'Computer Vision, AI, Robotics', mark: 'RG', photo: undefined as string | undefined },
+]
+
+const groups = [
+  { name: 'Predator Free 2050', role: 'National Conservation Mission', focus: 'Eradicating introduced predators by 2050', mark: 'PF', photo: undefined as string | undefined },
+  { name: 'Department of Conservation', role: 'Te Papa Atawhai', focus: 'New Zealand natural and historical heritage', mark: 'DOC', photo: undefined as string | undefined },
+  { name: 'Manaaki Whenua', role: 'Landcare Research', focus: 'Land, water, and biodiversity science', mark: 'MW', photo: undefined as string | undefined },
+]
+
+interface CollabCardProps {
+  name: string
+  role: string
+  focus: string
+  mark: string
+  photo?: string
+  shape: 'circle' | 'square'
+}
+
+function CollabCard({ name, role, focus, mark, photo, shape }: CollabCardProps) {
+  return (
+    <div className="text-center p-8 border border-white/10 rounded-xl hover:border-white/20 transition-colors flex flex-col items-center h-full">
+      <div
+        className={`w-24 h-24 mx-auto mb-4 overflow-hidden border border-white/20 bg-white/5 flex items-center justify-center ${
+          shape === 'circle' ? 'rounded-full' : 'rounded-xl'
+        }`}
+      >
+        {photo ? (
+          <Image src={photo} alt={name} width={96} height={96} className="w-full h-full object-cover object-top" />
+        ) : (
+          <span className="font-serif text-xl text-white/50">{mark}</span>
+        )}
+      </div>
+      <h4 className="font-serif text-xl text-white mb-1">{name}</h4>
+      <p className="text-sm font-medium mb-1" style={{ color: TEAL }}>{role}</p>
+      <p className="text-gray-400 text-sm mb-4">{focus}</p>
+    </div>
+  )
+}
+
+export default function Collaborators() {
+  return (
+    <div className="mt-16 pt-12 border-t border-white/10">
+      <AnimatedSection>
+        <p className="text-xs tracking-widest uppercase mb-6 font-medium text-white/40">People we work with</p>
+      </AnimatedSection>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
+        {people.map((p, i) => (
+          <AnimatedSection key={p.name} delay={i * 0.1}>
+            <CollabCard {...p} shape="circle" />
+          </AnimatedSection>
+        ))}
+      </div>
+
+      <AnimatedSection>
+        <p className="text-xs tracking-widest uppercase mb-6 font-medium text-white/40">Groups we work with</p>
+      </AnimatedSection>
+      <div className="grid sm:grid-cols-3 gap-8">
+        {groups.map((g, i) => (
+          <AnimatedSection key={g.name} delay={i * 0.1}>
+            <CollabCard {...g} shape="square" />
+          </AnimatedSection>
+        ))}
+      </div>
+    </div>
+  )
+}

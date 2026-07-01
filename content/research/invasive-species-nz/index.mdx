@@ -3,43 +3,38 @@ title: Invasive Species NZ
 date: 2024-06-01
 author: The Listening Lab
 excerpt: The world's first open field dataset of Common Brushtail Possum vocalisations.
-image: /images/our-work/invasive-species-nz/possum_stub.jpg
+image: /images/our-work/invasive-species/nga_manu_possum.jpg
 tags: [Mammal, Datasets, Aotearoa]
 ---
 
-### Field data of Common Brushtail Possum (*Trichosurus vulpecula*) vocalisations
+![Possum (T. vulpecula)](/images/our-work/invasive-species/nga_manu_possum.jpg)
+*Possum (T. vulpecula). Image: Ngā Manu*
 
-This dataset contains field recordings of the Common Brushtail Possum, an ecologically destructive invasive mammalian predator in New Zealand. Designed to aid automated pest monitoring networks, it represents a benchmark dataset for detecting sparse nocturnal animal vocalisations amidst heavy environmental confounding noise.
+The Common Brushtail Possum (*Trichosurus vulpecula*) is a highly destructive invasive mammalian predator in Aotearoa New Zealand. To support large-scale eradication and control efforts, we have developed and released the first open-source acoustic field dataset of possum vocalisations.
 
-[**Download the Dataset on Kaggle →**](https://www.kaggle.com/datasets/0f51f43c1b9340d2180656990e32532a3e87afc8520f153111b6ba39ebcad073)
+This dataset serves as a benchmark for training and evaluating automated pest monitoring networks. A primary challenge in Passive Acoustic Monitoring (PAM) is detecting sparse, nocturnal animal calls within environments saturated by complex, dynamic noise. To ensure models trained on this data perform robustly in real-world deployments, the dataset includes thousands of verified possum vocalisations alongside strictly curated "hard false-positives"—including wind gusts, rain, highway traffic, and non-target species such as native birds and livestock.
 
----
+![Spectrogram of a 5-second recording containing a possum vocalisation](/images/our-work/invasive-species/possum_spectrogram.png)
+*Spectrogram of a 5-second recording containing a T. vulpecula vocalisation from the dataset.*
 
-### Dataset Structure
+### Dataset Overview
 
-The core dataset contains 5-second audio segments (`.WAV`) downsampled to **16 kHz**, alongside the raw uncompressed field recordings:
+The release provides a comprehensive foundation for both binary classification and continuous detection tasks:
+- **Curated Segments:** 3,500 precisely annotated 5-second audio segments (16 kHz), split between target vocalisations and environmental confounders.
+- **Raw Field Audio:** Over 1,200 continuous 5-minute parent recordings (48 kHz) capturing the complete acoustic context.
 
-* **Training Set:** 3,000 segments balanced between verified possum vocalisations (1,062) and hard false-positives (1,938).
-* **Validation Set:** 500 segments evenly split between possum vocalisations (255) and environmental noise (245).
-* **Raw Field Audio:** 1,236 continuous 5-minute parent recordings sampled at **48 kHz**.
+<div className="flex justify-center mt-10 mb-12">
+  <a href="https://www.kaggle.com/datasets/0f51f43c1b9340d2180656990e32532a3e87afc8520f153111b6ba39ebcad073" target="_blank" rel="noopener noreferrer" className="bg-white/10 text-white border border-white/20 px-8 py-3 rounded-full font-medium hover:bg-white/20 transition-colors">
+    Download the Dataset on Kaggle →
+  </a>
+</div>
 
-#### Ground Truth & Filenames
+### Annotation & Expansion
 
-Filenames follow the strict temporal mapping `YYYYMMDD_HHMMSS_RX.WAV`:
-* `20220607_003000` defines the capture timestamp (e.g., 3:00 AM on 7 June 2022).
-* `R0` denotes the specific segment index sliced from the 5-minute parent audio file.
-* Ground truth binary classes: `possum` or `false-positive`.
+Locating and verifying sparse nocturnal vocalisations across hundreds of hours of raw audio is highly labour-intensive. To accelerate this process, labels for this dataset were generated using our active-learning few-shot platform, the [Listening Lab Annotator](/research/annotator).
 
-*Note: The `false-positive` class aggregates diverse real-world ecological confounders including rain, wind gusts, highway traffic, sheep 🐑, and native avifauna.*
+While current annotations support binary `{possum, noise}` classification, further work is required to extend the specificity of these labels to multi-class taxonomic categories (e.g., distinguishing between specific call types or isolated noise sources). We welcome collaborations to expand upon this foundation.
 
----
+<br/>
 
-### Acknowledgements & Collaborations
-
-This dataset was made possible through the financial support of **Predator Free 2050 Limited** (Capabilities Development Funding) and the Forest & Bird Stocker Scholarship. We thank our collaborators at the **Cacophony Project** and **Manaaki Whenua – Landcare Research** for their support, alongside summer research scholars Mikayla Franco, Isaac Cone, and Kaspar Soltero.
-
-#### Interested in expanding this dataset?
-
-Current annotations support binary `{possum, noise}` tasks. Work is required to extend annotation specificity to sub-classes (e.g. categorising distinct possum call types or specific noise sources). Get in touch if your group is interested in collaborating on multi-class labels.
-
-*Dataset labels were generated using our open-source [Listening Lab Annotator](https://github.com/Listening-Lab/Annotator).*
+*This dataset was made possible through the financial support of Predator Free 2050 Limited (Capabilities Development Funding) and the Forest & Bird Stocker Scholarship. We thank our collaborators at the Cacophony Project and Manaaki Whenua – Landcare Research for their support, alongside summer research scholars Mikayla Franco, Isaac Cone, and Kaspar Soltero.*

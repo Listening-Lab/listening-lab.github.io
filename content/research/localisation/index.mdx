@@ -7,15 +7,18 @@ image: /images/merlin-kraus-F5becDFzhHc-unsplash.jpg
 tags: [Localisation, Tools]
 ---
 
-> This audio localisation method aims to provide a complete pipeline from Passive Acoustic Monitoring to acoustic source localisation by automatically identifying and triangulating vocalisation events from arrays of microphones with overlapping range.
+This research presents a complete computational pipeline for acoustic source localisation using unsynchronised Passive Acoustic Monitoring (PAM) arrays. By deploying arrays of microphones with overlapping recording ranges (e.g., &lt;150m spacing), we can triangulate individual vocalisation events, allowing researchers to track spatial dynamics and estimate abundance metrics, such as the Minimum Number of Individuals (MNI).
 
-This audio localisation method is a sophisticated approach that delves into the realm of Passive Acoustic Monitoring (PAM) with the ultimate goal of achieving precise acoustic source localisation. The method is designed to streamline the process of identifying and triangulating vocalisation events using arrays of microphones strategically placed with overlapping ranges. By leveraging densely clustered microphones with 100m spacings, the methodology aims to capture a comprehensive soundscape of a specific valley under study.
+### Methodology
 
-Through the meticulous spatial mapping of sound sources, the methodology seeks to generate high-resolution spatial data that can offer a detailed representation of the acoustic environment within the valley. This data, when coupled with advanced species identification techniques, holds the potential to unlock valuable insights into the intricate dynamics of the ecosystem at a fine-scale level.
+Localising signals from independent, unsynchronised recorders in noisy environments presents significant challenges. We address these through a multi-stage automated pipeline:
 
-One of the key advantages of this approach lies in its ability to provide researchers with a nuanced understanding of activities such as feeding and trapping within the ecosystem. By combining the spatial information with species-specific vocalisations, the method opens up avenues for researchers to explore the interactions between different species, their behaviors, and the ecological processes that govern their existence.
+1. **Mask-Level Segmentation:** Traditional bounding-box classification is insufficiently precise for Time Difference of Arrival (TDOA) calculations. We use synthetic data generation to train a single-class image segmentation model, which isolates vocalisations to precise time-frequency masks.
+2. **Species Identification:** The segmented masks provide highly specific targets for a fine-tuned BirdNET classifier, significantly improving downstream classification accuracy (e.g., isolating *korimako* / bellbird vocalisations).
+3. **Signal Association & Cross-Correlation:** Mask-isolated audio signals are cross-correlated across nearby microphone streams to determine precise pairwise time lags. Operating at the mask level prevents background noise and environmental echoes from corrupting the TDOA estimations.
+4. **Gaussian Maximum Likelihood Estimation:** Source locations are estimated by performing a spatial grid search over the computed TDOAs for consistent microphone triplets. These individual estimates are then aggregated using Gaussian Maximum Likelihood Estimation (MLE) to produce a robust final spatial coordinate.
 
-Overall, this method represents a cutting-edge tool that not only facilitates the localization of acoustic sources but also offers a pathway towards a deeper comprehension of the ecological intricacies present within the study area. Through its innovative design and integration of advanced technologies, this approach stands poised to contribute significantly to the field of soundscape ecology and ecosystem dynamics.
+By mapping discrete vocalisation events in space, this approach bridges the gap between basic presence/absence PAM data and high-resolution spatial ecology, enabling scalable monitoring of ecosystem dynamics without the need for expensive, hardware-synchronised recording equipment.
 
 <div className="w-screen relative left-1/2 -translate-x-1/2 mt-16 max-w-6xl px-6">
   <LocalisationDemo />

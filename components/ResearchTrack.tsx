@@ -12,6 +12,20 @@ const TAG_COLORS = [
   '#ff9f43','#74b9ff','#fd79a8','#fdcb6e','#00b894'
 ]
 
+// Place nodes on a golden-angle spiral so they start pre-spread with no
+// overlap, instead of relying on random placement that can occasionally
+// settle the physics sim into a stuck, overlapping local minimum.
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
+
+function goldenSpiralLayout(n: number, cx: number, cy: number) {
+  const spacing = 140 // tuned to clear the 310px hard-collision boundary as n grows
+  return Array.from({ length: n }, (_, i) => {
+    const r = spacing * Math.sqrt(i + 0.5)
+    const theta = i * GOLDEN_ANGLE
+    return { x: cx + r * Math.cos(theta), y: cy + r * Math.sin(theta) }
+  })
+}
+
 export default function ResearchTrack({ researchItems }: { researchItems: ResearchMeta[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -20,11 +34,15 @@ export default function ResearchTrack({ researchItems }: { researchItems: Resear
   const tagRefs = useRef<(HTMLDivElement|null)[]>([])
   const prewarmed = useRef(false)
 
-  // Initialize node physics state synchronously so refs can attach safely
+  // Initialize node physics state synchronously so refs can attach safely.
+  // Golden-angle spiral placement starts nodes already spread out, so the
+  // sim settles cleanly instead of occasionally getting stuck in a bad
+  // overlapping configuration.
   if (nodesRef.current.length !== researchItems.length) {
+    const spiral = goldenSpiralLayout(researchItems.length, 600, 400)
     nodesRef.current = researchItems.map((_, i) => ({
-      x: 600 + (Math.random() - 0.5) * 400,
-      y: 400 + (Math.random() - 0.5) * 300,
+      x: spiral[i].x,
+      y: spiral[i].y,
       vx: 0, vy: 0,
       isDragging: false,
       el: nodesRef.current[i]?.el || null
@@ -117,8 +135,12 @@ export default function ResearchTrack({ researchItems }: { researchItems: Resear
       // Integration
       nodes.forEach(n => {
         if (!n.isDragging) {
-          n.vx *= 0.90
-          n.vy *= 0.90
+          n.vx *= 0.85
+          n.vy *= 0.85
+          // Sleep threshold — squash residual sub-pixel velocity once a node
+          // is effectively at rest, so it doesn't keep micro-jittering.
+          if (Math.abs(n.vx) < 0.02) n.vx = 0
+          if (Math.abs(n.vy) < 0.02) n.vy = 0
           n.x += n.vx
           n.y += n.vy
         }
@@ -289,7 +311,7 @@ export default function ResearchTrack({ researchItems }: { researchItems: Resear
               href={`/research/${item.slug}`}
               onClick={(e) => { if (nodesRef.current[idx]?.el?.hasAttribute('data-dragged')) e.preventDefault() }}
               draggable={false}
-              className="relative block w-[260px] hover:w-[480px] h-[260px] rounded-[130px] bg-[#0a1628]/60 backdrop-blur-sm border border-white/10 hover:border-white/30 overflow-hidden group transition-all duration-500 ease-out focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-grab active:cursor-grabbing shadow-2xl"
+              className="relative block w-[260px] hover:w-[480px] h-[260px] rounded-[130px] bg-[#0a1628]/60 backdrop-blur-sm border-2 border-white/25 hover:border-white/60 overflow-hidden group transition-all duration-500 ease-out focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-grab active:cursor-grabbing shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25),0_0_25px_rgba(78,205,196,0.12)] hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25),0_0_45px_rgba(78,205,196,0.35)]"
             >
               <div className="absolute inset-0 z-0 pointer-events-none rounded-[130px] overflow-hidden">
                 <Image src={item.image || '/images/merlin-kraus-F5becDFzhHc-unsplash.jpg'} fill className="object-cover opacity-30 group-hover:opacity-50 transition-opacity duration-500" alt="" draggable={false} />
