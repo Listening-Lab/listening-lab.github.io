@@ -1,41 +1,34 @@
 import { Metadata } from 'next'
 import AnimatedSection from '@/components/AnimatedSection'
+import { getAllResearch } from '@/lib/research'
+import ResearchCard from '@/components/ResearchCard'
+import { format } from 'date-fns'
 
 export const metadata: Metadata = { title: 'Research' }
 
-const projects = [
-  {
-    title: 'Computational Bioacoustics',
-    description: '',
-    tags: ['Bioacoustics'],
-  }
-]
+export default async function ResearchPage() {
+  const researchItems = await getAllResearch()
 
-export default function ResearchPage() {
   return (
     <div className="min-h-screen bg-ocean-dark">
-      <div className="max-w-5xl mx-auto px-6 py-24">
-        <AnimatedSection>
-          <h1 className="font-serif text-5xl text-white mb-4">Research</h1>
-          <p className="text-xl text-gray-400 mb-16">
-            Our work spans auditory perception, environmental acoustics, and sound design.
+      <div className="max-w-6xl mx-auto px-6 py-32">
+        <AnimatedSection className="mb-16">
+          <h1 className="font-serif text-5xl md:text-6xl text-white mb-6">Our Research</h1>
+          <p className="text-xl text-gray-400 max-w-2xl">
+            Explore our interactive tools, soundscapes, and computational bioacoustic models.
           </p>
         </AnimatedSection>
 
-        <div className="grid md:grid-cols-2 gap-8">
-          {projects.map((project, i) => (
-            <AnimatedSection key={project.title} delay={i * 0.1}>
-              <div className="border border-white/10 rounded-2xl p-8 hover:border-white/25 hover:bg-white/5 transition-all">
-                <h2 className="font-serif text-2xl text-white mb-3">{project.title}</h2>
-                <p className="text-gray-400 mb-4">{project.description}</p>
-                <div className="flex flex-wrap gap-2">
-                  {project.tags.map(tag => (
-                    <span key={tag} className="text-xs font-medium bg-brand-500/20 text-brand-500 px-3 py-1 rounded-full">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+          {researchItems.map((item, i) => (
+            <AnimatedSection key={item.slug} delay={i * 0.1}>
+              <ResearchCard
+                title={item.title}
+                excerpt={item.excerpt}
+                slug={item.slug}
+                date={format(new Date(item.date), 'MMM yyyy')}
+                tags={item.tags}
+              />
             </AnimatedSection>
           ))}
         </div>

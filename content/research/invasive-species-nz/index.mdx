@@ -1,0 +1,40 @@
+---
+title: Invasive Species NZ
+date: 2024-06-01
+author: The Listening Lab
+excerpt: The world's first open field dataset of Common Brushtail Possum vocalisations.
+image: /images/our-work/invasive-species/nga_manu_possum.jpg
+tags: [Mammal, Datasets, Aotearoa]
+---
+
+![Possum (T. vulpecula)](/images/our-work/invasive-species/nga_manu_possum.jpg)
+*Possum (T. vulpecula). Image: Ngā Manu*
+
+The Common Brushtail Possum (*Trichosurus vulpecula*) is a highly destructive invasive mammalian predator in Aotearoa New Zealand. To support large-scale eradication and control efforts, we have developed and released the first open-source acoustic field dataset of possum vocalisations.
+
+This dataset serves as a benchmark for training and evaluating automated pest monitoring networks. A primary challenge in Passive Acoustic Monitoring (PAM) is detecting sparse, nocturnal animal calls within environments saturated by complex, dynamic noise. To ensure models trained on this data perform robustly in real-world deployments, the dataset includes thousands of verified possum vocalisations alongside strictly curated "hard false-positives"—including wind gusts, rain, highway traffic, and non-target species such as native birds and livestock.
+
+![Spectrogram of a 5-second recording containing a possum vocalisation](/images/our-work/invasive-species/possum_spectrogram.png)
+*Spectrogram of a 5-second recording containing a T. vulpecula vocalisation from the dataset.*
+
+### Dataset Overview
+
+The release provides a comprehensive foundation for both binary classification and continuous detection tasks:
+- **Curated Segments:** 3,500 precisely annotated 5-second audio segments (16 kHz), split between target vocalisations and environmental confounders.
+- **Raw Field Audio:** Over 1,200 continuous 5-minute parent recordings (48 kHz) capturing the complete acoustic context.
+
+<div className="flex justify-center mt-10 mb-12">
+  <a href="https://www.kaggle.com/datasets/0f51f43c1b9340d2180656990e32532a3e87afc8520f153111b6ba39ebcad073" target="_blank" rel="noopener noreferrer" className="bg-white/10 text-white border border-white/20 px-8 py-3 rounded-full font-medium hover:bg-white/20 transition-colors">
+    Download the Dataset on Kaggle →
+  </a>
+</div>
+
+### Annotation & Expansion
+
+Locating and verifying sparse nocturnal vocalisations across hundreds of hours of raw audio is highly labour-intensive. To accelerate this process, labels for this dataset were generated using our active-learning few-shot platform, the [Listening Lab Annotator](/research/annotator).
+
+While current annotations support binary `{possum, noise}` classification, further work is required to extend the specificity of these labels to multi-class taxonomic categories (e.g., distinguishing between specific call types or isolated noise sources). We welcome collaborations to expand upon this foundation.
+
+<br/>
+
+*This dataset was made possible through the financial support of Predator Free 2050 Limited (Capabilities Development Funding) and the Forest & Bird Stocker Scholarship. We thank our collaborators at the Cacophony Project and Manaaki Whenua – Landcare Research for their support, alongside summer research scholars Mikayla Franco, Isaac Cone, and Kaspar Soltero.*

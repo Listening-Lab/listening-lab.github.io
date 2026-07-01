@@ -152,7 +152,7 @@ const VERT = /* glsl */`
     vec3 baseCol  = (uUseSpecies > 0.5 && isSel) ? aSpeciesColor : aRegionColor;
     vColor = baseCol;
     if (noSel || unassigned) vAlpha = 0.85;
-    else vAlpha = isSel ? 1.0 : 0.06;
+    else vAlpha = isSel ? 1.0 : 0.25;
     float breathe  = 1.0 + 0.08 * sin(uTime * 1.4 + position.x * 4.0 + position.y * 3.0);
     float sizeScale = noSel ? 1.0 : ${MAP_POINT_SELECTED_SCALE.toFixed(1)};
     float sz = aSize * breathe * sizeScale * uPixelRatio;
@@ -287,8 +287,8 @@ function initThree(
     regionGroups.forEach((group: RegionGroup, groupRi: number) => {
       const isSelected = groupRi === sel
       const showAll = sel < 0
-      group.fillMats.forEach((m: THREE.MeshBasicMaterial)   => { m.opacity = showAll ? 0.10 : isSelected ? 0.20 : 0.04 })
-      group.outlineMats.forEach((m: THREE.LineBasicMaterial) => { m.opacity = showAll ? 0.55 : isSelected ? 0.85 : 0.20 })
+      group.fillMats.forEach((m: THREE.MeshBasicMaterial)   => { m.opacity = showAll ? 0.10 : isSelected ? 0.20 : 0.06 })
+      group.outlineMats.forEach((m: THREE.LineBasicMaterial) => { m.opacity = showAll ? 0.55 : isSelected ? 0.85 : 0.35 })
     })
 
     if (sel >= 0) {

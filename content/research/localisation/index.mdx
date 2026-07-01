@@ -1,0 +1,25 @@
+---
+title: Audio Localisation
+date: 2025-10-01
+author: Kaspar Soltero
+excerpt: From Passive Acoustic Monitoring to acoustic source localisation.
+image: /images/merlin-kraus-F5becDFzhHc-unsplash.jpg
+tags: [Localisation, Tools]
+---
+
+This research presents a complete computational pipeline for acoustic source localisation using unsynchronised Passive Acoustic Monitoring (PAM) arrays. By deploying arrays of microphones with overlapping recording ranges (e.g., &lt;150m spacing), we can triangulate individual vocalisation events, allowing researchers to track spatial dynamics and estimate abundance metrics, such as the Minimum Number of Individuals (MNI).
+
+### Methodology
+
+Localising signals from independent, unsynchronised recorders in noisy environments presents significant challenges. We address these through a multi-stage automated pipeline:
+
+1. **Mask-Level Segmentation:** Traditional bounding-box classification is insufficiently precise for Time Difference of Arrival (TDOA) calculations. We use synthetic data generation to train a single-class image segmentation model, which isolates vocalisations to precise time-frequency masks.
+2. **Species Identification:** The segmented masks provide highly specific targets for a fine-tuned BirdNET classifier, significantly improving downstream classification accuracy (e.g., isolating *korimako* / bellbird vocalisations).
+3. **Signal Association & Cross-Correlation:** Mask-isolated audio signals are cross-correlated across nearby microphone streams to determine precise pairwise time lags. Operating at the mask level prevents background noise and environmental echoes from corrupting the TDOA estimations.
+4. **Gaussian Maximum Likelihood Estimation:** Source locations are estimated by performing a spatial grid search over the computed TDOAs for consistent microphone triplets. These individual estimates are then aggregated using Gaussian Maximum Likelihood Estimation (MLE) to produce a robust final spatial coordinate.
+
+By mapping discrete vocalisation events in space, this approach bridges the gap between basic presence/absence PAM data and high-resolution spatial ecology, enabling scalable monitoring of ecosystem dynamics without the need for expensive, hardware-synchronised recording equipment.
+
+<div className="w-screen relative left-1/2 -translate-x-1/2 mt-16 max-w-6xl px-6">
+  <LocalisationDemo />
+</div>

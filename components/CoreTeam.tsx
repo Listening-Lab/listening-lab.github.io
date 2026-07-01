@@ -1,5 +1,6 @@
 import AnimatedSection from './AnimatedSection'
 import Image from 'next/image'
+import Collaborators from './Collaborators'
 
 const TEAL = '#4ecdc4'
 
@@ -140,6 +141,8 @@ export default function CoreTeam() {
             </AnimatedSection>
           ))}
         </div>
+
+        <Collaborators />
       </div>
     </section>
   )

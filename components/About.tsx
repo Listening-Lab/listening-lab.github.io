@@ -7,7 +7,7 @@ const pillars = [
   {
     title: 'National-scale monitoring',
     desc:
-      'Deploying passive acoustic recorder networks across New Zealand\'s forests, wetlands, and coastlines to track biodiversity change over time.',
+      'Deploying passive acoustic recorder networks across Aotearoa New Zealand\'s forests, wetlands, and coastlines to track biodiversity change over time.',
   },
   {
     title: 'Computational bioacoustic tools',
@@ -49,12 +49,6 @@ export default function About() {
               By combining passive recording technology with automated analysis, we make it possible to track 
               wildlife populations at a scale that was previously out of reach.
             </p>
-            <Link
-              href="/about"
-              className="inline-block border border-white/30 text-white px-8 py-3 rounded-full font-medium hover:bg-white/10 transition-colors"
-            >
-              Meet the team
-            </Link>
           </AnimatedSection>
 
           {/* ── Right: aims ── */}
