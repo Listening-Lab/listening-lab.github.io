@@ -10,6 +10,14 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  .cursor-glow {
+    animation: hueCycle 12s linear infinite;
+  }
+  @keyframes hueCycle {
+    0%   { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
+  }
 }
 
 @layer base {

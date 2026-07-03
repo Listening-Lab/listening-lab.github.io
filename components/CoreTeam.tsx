@@ -1,6 +1,8 @@
 import AnimatedSection from './AnimatedSection'
 import Image from 'next/image'
+import Link from 'next/link'
 import Collaborators from './Collaborators'
+import CardGlow from './CardGlow'
 
 const TEAL = '#4ecdc4'
 
@@ -12,6 +14,7 @@ const team = [
     description: 'Machine Learning, Biodiversity',
     initials: 'BM',
     photo: '/images/team/ben_mcewen.jpg',
+    accent: '#4ecdc4',
     links: {
       website: 'https://www.benmcewen-phd.com/',
       scholar: 'https://scholar.google.com/citations?hl=en&user=x47JZUkAAAAJ&view_op=list_works&sortby=pubdate',
@@ -25,6 +28,7 @@ const team = [
     description: 'Bioacoustics, Sound Localisation',
     initials: 'KS',
     photo: '/images/team/kaspar_soltero.jpg',
+    accent: '#74b9ff',
     links: {
       website: '',
       scholar: '',
@@ -38,6 +42,7 @@ const team = [
     description: 'Acoustics, Dynamics and Vibrations',
     initials: 'SG',
     photo: '/images/team/stefanie_gutschmidt.jpg',
+    accent: '#c3a6ff',
     links: {
       website: 'https://profiles.canterbury.ac.nz/Stefanie-Gutschmidt/',
       scholar: 'https://scholar.google.com/citations?hl=en&user=eQqrBUwAAAAJ&view_op=list_works&sortby=pubdate',
@@ -71,10 +76,21 @@ function LinkedInIcon() {
   )
 }
 
-export default function CoreTeam() {
+interface CoreTeamProps {
+  showCollaborators?: boolean
+}
+
+export default function CoreTeam({ showCollaborators = false }: CoreTeamProps) {
   return (
-    <section className="py-24 bg-ocean-dark">
-      <div className="max-w-6xl mx-auto px-6">
+    <section className="relative py-24 bg-ocean-dark overflow-hidden">
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 55% 45% at 15% 0%, rgba(78,205,196,0.10), transparent 60%), radial-gradient(ellipse 50% 40% at 90% 100%, rgba(195,166,255,0.10), transparent 60%)',
+        }}
+      />
+      <div className="relative z-10 max-w-6xl mx-auto px-6">
         <AnimatedSection>
           <p className="text-xs tracking-widest uppercase mb-4 font-medium" style={{ color: TEAL }}>
             The people
@@ -87,8 +103,11 @@ export default function CoreTeam() {
         <div className="grid sm:grid-cols-3 gap-8">
           {team.map((member, i) => (
             <AnimatedSection key={member.name} delay={i * 0.1}>
-              <div className="text-center p-8 border border-white/10 rounded-xl hover:border-white/20 transition-colors flex flex-col items-center">
-                <div className="w-24 h-24 rounded-full mx-auto mb-4 overflow-hidden border border-white/20">
+              <CardGlow color={member.accent} className="text-center p-8 border border-white/10 hover:border-[var(--accent)] transition-colors h-full">
+                <div
+                  className="w-24 h-24 rounded-full mx-auto mb-4 overflow-hidden border-2 transition-colors"
+                  style={{ borderColor: `${member.accent}55` }}
+                >
                   <Image
                     src={member.photo}
                     alt={member.name}
@@ -98,7 +117,7 @@ export default function CoreTeam() {
                   />
                 </div>
                 <h3 className="font-serif text-xl text-white mb-1">{member.name}</h3>
-                <p className="text-sm font-medium mb-1" style={{ color: TEAL }}>{member.role}</p>
+                <p className="text-sm font-medium mb-1" style={{ color: member.accent }}>{member.role}</p>
                 <p className="text-gray-500 text-xs mb-1">{member.affiliation}</p>
                 <p className="text-gray-400 text-sm mb-4">{member.description}</p>
 
@@ -137,12 +156,20 @@ export default function CoreTeam() {
                     </a>
                   )}
                 </div>
-              </div>
+              </CardGlow>
             </AnimatedSection>
           ))}
         </div>
 
-        <Collaborators />
+        {showCollaborators ? (
+          <Collaborators />
+        ) : (
+          <div className="text-center mt-12">
+            <Link href="/people" className="text-brand-100 text-sm font-medium hover:underline">
+              Meet the full team & our collaborators →
+            </Link>
+          </div>
+        )}
       </div>
     </section>
   )
