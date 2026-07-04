@@ -1,8 +1,9 @@
+'use client'
+import { useEffect, useRef } from 'react'
 import AnimatedSection from './AnimatedSection'
 import Image from 'next/image'
 import Link from 'next/link'
 import Collaborators from './Collaborators'
-import CardGlow from './CardGlow'
 
 const TEAL = '#4ecdc4'
 
@@ -81,13 +82,50 @@ interface CoreTeamProps {
 }
 
 export default function CoreTeam({ showCollaborators = false }: CoreTeamProps) {
+  const bgRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = bgRef.current
+    if (!el) return
+    let raf: number
+    let currentX = window.innerWidth / 2
+    let currentY = window.innerHeight / 2
+    let mouseX = currentX
+    let mouseY = currentY
+
+    const animate = () => {
+      const rect = el.getBoundingClientRect()
+      const tx = mouseX - rect.left
+      const ty = mouseY - rect.top
+      currentX += (tx - currentX) * 0.03
+      currentY += (ty - currentY) * 0.03
+      el.style.setProperty('--mx', `${currentX}px`)
+      el.style.setProperty('--my', `${currentY}px`)
+      raf = requestAnimationFrame(animate)
+    }
+    raf = requestAnimationFrame(animate)
+
+    const onMove = (e: MouseEvent) => {
+      mouseX = e.clientX
+      mouseY = e.clientY
+    }
+    window.addEventListener('mousemove', onMove)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      cancelAnimationFrame(raf)
+    }
+  }, [])
+
   return (
     <section className="relative py-24 bg-ocean-dark overflow-hidden">
       <div
-        className="pointer-events-none absolute inset-0"
+        ref={bgRef}
+        className="pointer-events-none absolute inset-0 transition-opacity duration-1000"
         style={{
           background:
-            'radial-gradient(ellipse 55% 45% at 15% 0%, rgba(78,205,196,0.10), transparent 60%), radial-gradient(ellipse 50% 40% at 90% 100%, rgba(195,166,255,0.10), transparent 60%)',
+            `radial-gradient(800px circle at var(--mx, 50%) var(--my, 50%), rgba(78,205,196,0.06), transparent 40%),
+             radial-gradient(1000px circle at calc(var(--mx, 50%) + 250px) calc(var(--my, 50%) - 150px), rgba(195,166,255,0.04), transparent 50%),
+             radial-gradient(900px circle at calc(var(--mx, 50%) - 300px) calc(var(--my, 50%) + 200px), rgba(116,185,255,0.04), transparent 50%)`
         }}
       />
       <div className="relative z-10 max-w-6xl mx-auto px-6">
@@ -103,7 +141,7 @@ export default function CoreTeam({ showCollaborators = false }: CoreTeamProps) {
         <div className="grid sm:grid-cols-3 gap-8">
           {team.map((member, i) => (
             <AnimatedSection key={member.name} delay={i * 0.1}>
-              <CardGlow color={member.accent} className="text-center p-8 border border-white/10 hover:border-[var(--accent)] transition-colors h-full">
+              <div className="relative group flex flex-col items-center text-center h-full p-8 rounded-3xl bg-white/5 backdrop-blur-md border border-white/10 transition-all duration-500 hover:-translate-y-1 hover:bg-white/10 hover:border-white/20" style={{ boxShadow: '0 10px 40px -10px rgba(0,0,0,0.2)' }}>
                 <div
                   className="w-24 h-24 rounded-full mx-auto mb-4 overflow-hidden border-2 transition-colors"
                   style={{ borderColor: `${member.accent}55` }}
@@ -156,7 +194,7 @@ export default function CoreTeam({ showCollaborators = false }: CoreTeamProps) {
                     </a>
                   )}
                 </div>
-              </CardGlow>
+              </div>
             </AnimatedSection>
           ))}
         </div>
@@ -164,8 +202,8 @@ export default function CoreTeam({ showCollaborators = false }: CoreTeamProps) {
         {showCollaborators ? (
           <Collaborators />
         ) : (
-          <div className="text-center mt-12">
-            <Link href="/people" className="text-brand-100 text-sm font-medium hover:underline">
+          <div className="text-center mt-16">
+            <Link href="/people" className="inline-block bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-8 py-3 text-sm font-medium text-white hover:bg-white/20 transition-colors">
               Meet the full team & our collaborators →
             </Link>
           </div>

@@ -981,7 +981,6 @@ export default function AcousticMap() {
     <section key={mountKey} className="relative w-full bg-ocean-dark text-white overflow-hidden" style={{ minHeight: '100vh' }}>
       {/* Header */}
       <div className="relative z-10 pt-24 pb-4 text-center px-4">
-        <p className="text-brand-100 text-xs tracking-widest uppercase mb-2">Interactive</p>
         <h2 className="font-serif text-4xl md:text-5xl mb-3">Acoustic Map of Aotearoa</h2>
         <p className="text-gray-200 max-w-xl pb-4 mx-auto text-sm">We are building a map of the sounds of nature.</p>
         <p className="text-gray-400 max-w-xl mx-auto text-sm">
