@@ -3,7 +3,7 @@
 Website for the Listening Lab NZ research group, hosted on GitHub Pages.
 
 Built with **Next.js 14**, **Tailwind CSS**, **Framer Motion**, and **MDX**.
-
+ 
 ## Development
 
 ```bash
