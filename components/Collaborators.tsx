@@ -2,7 +2,6 @@
 import { useRef } from 'react'
 import Image from 'next/image'
 import AnimatedSection from './AnimatedSection'
-import CardGlow from './CardGlow'
 
 const TEAL = '#4ecdc4'
 
@@ -38,7 +37,8 @@ interface CollabCardProps {
 
 function CollabCard({ name, role, focus, mark, photo, shape, color }: CollabCardProps) {
   return (
-    <CardGlow color={color} className="text-center p-8 border border-white/10 hover:border-[var(--accent)] transition-colors h-full">
+    <div className="relative group flex flex-col items-center text-center h-full p-8 rounded-3xl bg-white/5 backdrop-blur-md border border-white/10 transition-all duration-500 hover:-translate-y-1 hover:bg-white/10 hover:border-white/20"
+         style={{ boxShadow: '0 10px 40px -10px rgba(0,0,0,0.2)' }}>
       <div
         className={`w-24 h-24 mx-auto mb-4 overflow-hidden border-2 bg-white/5 flex items-center justify-center transition-colors ${
           shape === 'circle' ? 'rounded-full' : 'rounded-xl'
@@ -54,7 +54,7 @@ function CollabCard({ name, role, focus, mark, photo, shape, color }: CollabCard
       <h4 className="font-serif text-xl text-white mb-1">{name}</h4>
       <p className="text-sm font-medium mb-1" style={{ color }}>{role}</p>
       <p className="text-gray-400 text-sm mb-4">{focus}</p>
-    </CardGlow>
+    </div>
   )
 }
 

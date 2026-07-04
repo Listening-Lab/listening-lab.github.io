@@ -49,7 +49,7 @@ export default function AudioShowcase() {
   }
 
   return (
-    <section className="bg-ocean-dark text-white py-24">
+    <section className="bg-ocean-dark text-white py-24 not-prose">
       <div className="max-w-5xl mx-auto px-6">
         <AnimatedSection>
           <h2 className="font-serif text-4xl mb-4">Listen to New Zealand</h2>
@@ -73,11 +73,12 @@ export default function AudioShowcase() {
           {soundscapes.map((s, i) => (
             <AnimatedSection key={s.label} delay={i * 0.1}>
               <div className="flex items-center gap-6 bg-white/5 hover:bg-white/10 rounded-2xl px-6 py-5 transition-colors group">
-                {s.image ?
-                  <div className="w-12 h-12 rounded-2xl overflow-hidden">
-                  <img src={s.image}/>
-                </div> : null
-                }
+
+                {s.image ? (
+                  <div className="w-12 h-12 rounded-2xl overflow-hidden flex-shrink-0">
+                    <img src={s.image} alt={s.label} className="w-full h-full object-cover object-center !m-0" />
+                  </div>
+                ) : null}
                 
                 <button
                   onClick={() => setPlaying(playing === i ? null : i)}
