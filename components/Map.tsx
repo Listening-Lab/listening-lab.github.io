@@ -177,7 +177,9 @@ function initThree(
   el: HTMLDivElement,
   data: AppData,
   initialRegionName: string | null,
-  isStatic: boolean
+  isStatic: boolean,
+  panX: number,
+  zoomWidthFraction: number
 ): { cleanup: () => void; selectByName: (name: string | null) => void } {
   const { regions, recordings, speciesColors } = data
   const n = recordings.length
@@ -192,6 +194,11 @@ function initThree(
   const scene = new THREE.Scene()
   const cam = new THREE.PerspectiveCamera(52, el.clientWidth / el.clientHeight, 0.01, 50)
   cam.position.set(0, 0, 4.5)
+  // Zoom/distance is calculated against a narrower "virtual" aspect
+  // (zoomWidthFraction of the real container) so the map keeps its old
+  // framing/size even though the canvas itself now spans the full width
+  // (avoids hard-clipping the map at a narrower container's edge).
+  const zoomAspect = (el.clientWidth * zoomWidthFraction) / el.clientHeight
 
   const camState = { baseX: 0, baseY: 0, baseZ: 4.5, curX: 0, curY: 0, curZ: 4.5, lookX: 0, lookY: 0 }
 
@@ -297,9 +304,9 @@ function initThree(
       const cy = (bbox.minY + bbox.maxY) / 2
       const size = Math.max(bbox.maxX - bbox.minX, bbox.maxY - bbox.minY) * 1.4
       const fovR = cam.fov * Math.PI / 180
-      const dist = (size / 2) / Math.tan(fovR / 2) / Math.min(1, cam.aspect)
-      camState.baseX = cx; camState.baseY = cy; camState.baseZ = Math.min(dist, 6)
-      camState.lookX = cx; camState.lookY = cy
+      const dist = (size / 2) / Math.tan(fovR / 2) / Math.min(1, zoomAspect)
+      camState.baseX = cx + panX; camState.baseY = cy; camState.baseZ = Math.min(dist, 6)
+      camState.lookX = cx + panX; camState.lookY = cy
     } else {
       camState.baseX = 0; camState.baseY = 0; camState.baseZ = 4.5
       camState.lookX = 0; camState.lookY = 0
@@ -323,11 +330,11 @@ function initThree(
       const cy = (bbox.minY + bbox.maxY) / 2
       const size = Math.max(bbox.maxX - bbox.minX, bbox.maxY - bbox.minY) * 1.4
       const fovR = cam.fov * Math.PI / 180
-      const dist = (size / 2) / Math.tan(fovR / 2) / Math.min(1, cam.aspect)
+      const dist = (size / 2) / Math.tan(fovR / 2) / Math.min(1, zoomAspect)
       const z = Math.min(dist, 6)
-      camState.curX = cx; camState.curY = cy; camState.curZ = z
-      cam.position.set(cx, cy, z)
-      cam.lookAt(cx, cy, 0)
+      camState.curX = cx + panX; camState.curY = cy; camState.curZ = z
+      cam.position.set(cx + panX, cy, z)
+      cam.lookAt(cx + panX, cy, 0)
     }
   }
 
@@ -395,9 +402,11 @@ interface MapProps {
   selectedRegion?: string | null
   className?: string
   static?: boolean
+  panX?: number
+  zoomWidthFraction?: number
 }
 
-export default function Map({ selectedRegion = null, className = '', static: isStatic = false }: MapProps) {
+export default function Map({ selectedRegion = null, className = '', static: isStatic = false, panX = 0, zoomWidthFraction = 1 }: MapProps) {
   const elRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<{ cleanup: () => void; selectByName: (n: string | null) => void } | null>(null)
 
@@ -409,7 +418,7 @@ export default function Map({ selectedRegion = null, className = '', static: isS
 
     loadData().then(data => {
       if (unmounted || !el) return
-      const api = initThree(el, data, selectedRegion, isStatic)
+      const api = initThree(el, data, selectedRegion, isStatic, panX, zoomWidthFraction)
       apiRef.current = api
     }).catch(console.error)
 
