@@ -39,7 +39,7 @@ interface CollabCardProps {
 function CollabCard({ name, role, focus, mark, photo, shape, color }: CollabCardProps) {
   return (
     <GlintCard className="rounded-3xl h-full transition-transform duration-500 hover:-translate-y-1">
-    <div className="relative group flex flex-col items-center text-center h-full p-8 rounded-3xl bg-[#0a1628]/55 backdrop-blur-md border border-white/10 transition-colors duration-500 hover:bg-black/60 hover:border-white/25"
+    <div className="relative group flex flex-col items-center text-center h-full p-8 rounded-3xl bg-white/5 backdrop-blur-md border border-white/10 transition-colors duration-500 hover:bg-[#0a1628]/55 hover:border-white/25"
          style={{ boxShadow: '0 10px 40px -10px rgba(0,0,0,0.2)' }}>
       <div
         className={`w-24 h-24 mx-auto mb-4 overflow-hidden border-2 bg-white/5 flex items-center justify-center transition-colors ${
