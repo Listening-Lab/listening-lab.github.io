@@ -120,6 +120,24 @@ export default function HeroV4() {
           </Link>
         </motion.div>
       </div>
+
+      {/* Scroll Indicator */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.8, delay: 0.8 }}
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 hidden md:block"
+      >
+        <Link
+          href="#acoustic-map"
+          className="flex items-center gap-3 bg-white/5 backdrop-blur-md text-white border border-white/20 px-6 py-2.5 rounded-full font-medium hover:bg-white/20 transition-colors shadow-2xl text-sm whitespace-nowrap"
+        >
+          Explore the Bioacoustic Map of Aotearoa
+          <svg className="w-4 h-4 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          </svg>
+        </Link>
+      </motion.div>
     </section>
   )
 }

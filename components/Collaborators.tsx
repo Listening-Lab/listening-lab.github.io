@@ -2,6 +2,7 @@
 import { useRef } from 'react'
 import Image from 'next/image'
 import AnimatedSection from './AnimatedSection'
+import GlintCard from './GlintCard'
 
 const TEAL = '#4ecdc4'
 
@@ -15,8 +16,8 @@ const people = [
   { name: 'Prof Jim Briskie', role: 'Professor, Biological Sciences', focus: 'Avian Reproductive Behaviour, Conservation', mark: 'JB', photo: undefined as string | undefined },
   { name: 'A/Prof Andrew Bainbridge-Smith', role: 'Assoc. Professor, CSSE', focus: 'Retinal Imaging, Digital Logical Circuits', mark: 'AB', photo: undefined as string | undefined },
   { name: 'Prof Richard Green', role: 'Professor, CSSE', focus: 'Computer Vision, AI, Robotics', mark: 'RG', photo: undefined as string | undefined },
-  { name: 'Isaac Cone', role: 'Summer Research Scholar', focus: 'Invasive Species Bioacoustic Annotation', mark: 'IC', photo: undefined as string | undefined },
-  { name: 'Mikayla Franco', role: 'Summer Research Scholar', focus: 'Invasive Species Bioacoustic Annotation', mark: 'MF', photo: undefined as string | undefined },
+  { name: 'Isaac Cone', role: 'Summer Student', focus: 'Annotator development', mark: 'IC', photo: undefined as string | undefined },
+  { name: 'Mikayla Franco', role: 'Summer Student', focus: 'Field work and annotation', mark: 'MF', photo: undefined as string | undefined },
 ]
 
 const groups = [
@@ -37,7 +38,8 @@ interface CollabCardProps {
 
 function CollabCard({ name, role, focus, mark, photo, shape, color }: CollabCardProps) {
   return (
-    <div className="relative group flex flex-col items-center text-center h-full p-8 rounded-3xl bg-white/5 backdrop-blur-md border border-white/10 transition-all duration-500 hover:-translate-y-1 hover:bg-white/10 hover:border-white/20"
+    <GlintCard className="rounded-3xl h-full transition-transform duration-500 hover:-translate-y-1">
+    <div className="relative group flex flex-col items-center text-center h-full p-8 rounded-3xl bg-white/5 backdrop-blur-md border border-white/10 transition-colors duration-500 hover:bg-[#0a1628]/55 hover:border-white/25"
          style={{ boxShadow: '0 10px 40px -10px rgba(0,0,0,0.2)' }}>
       <div
         className={`w-24 h-24 mx-auto mb-4 overflow-hidden border-2 bg-white/5 flex items-center justify-center transition-colors ${
@@ -55,6 +57,7 @@ function CollabCard({ name, role, focus, mark, photo, shape, color }: CollabCard
       <p className="text-sm font-medium mb-1" style={{ color }}>{role}</p>
       <p className="text-gray-400 text-sm mb-4">{focus}</p>
     </div>
+    </GlintCard>
   )
 }
 

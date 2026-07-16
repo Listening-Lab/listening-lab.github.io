@@ -39,7 +39,8 @@ export default function ResearchTrack({ researchItems }: { researchItems: Resear
   // sim settles cleanly instead of occasionally getting stuck in a bad
   // overlapping configuration.
   if (nodesRef.current.length !== researchItems.length) {
-    const spiral = goldenSpiralLayout(researchItems.length, 600, 400)
+    const initialWidth = typeof window !== 'undefined' ? Math.max(window.innerWidth, 1400) : 1400
+    const spiral = goldenSpiralLayout(researchItems.length, initialWidth / 2, 400)
     nodesRef.current = researchItems.map((_, i) => ({
       x: spiral[i].x,
       y: spiral[i].y,
@@ -205,6 +206,16 @@ export default function ResearchTrack({ researchItems }: { researchItems: Resear
     animId = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(animId)
   }, [edges, researchItems])
+
+  // Center scroll horizontally on mount if the canvas overflows
+  useEffect(() => {
+    if (containerRef.current && canvasRef.current) {
+      const scrollMax = canvasRef.current.clientWidth - containerRef.current.clientWidth
+      if (scrollMax > 0) {
+        containerRef.current.scrollLeft = scrollMax / 2
+      }
+    }
+  }, [])
 
   const handlePointerDown = (i: number, e: React.PointerEvent) => {
     const n = nodesRef.current[i]
