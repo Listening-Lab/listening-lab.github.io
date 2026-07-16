@@ -16,8 +16,8 @@ const people = [
   { name: 'Prof Jim Briskie', role: 'Professor, Biological Sciences', focus: 'Avian Reproductive Behaviour, Conservation', mark: 'JB', photo: undefined as string | undefined },
   { name: 'A/Prof Andrew Bainbridge-Smith', role: 'Assoc. Professor, CSSE', focus: 'Retinal Imaging, Digital Logical Circuits', mark: 'AB', photo: undefined as string | undefined },
   { name: 'Prof Richard Green', role: 'Professor, CSSE', focus: 'Computer Vision, AI, Robotics', mark: 'RG', photo: undefined as string | undefined },
-  { name: 'Isaac Cone', role: 'Summer Research Scholar', focus: 'Invasive Species Bioacoustic Annotation', mark: 'IC', photo: undefined as string | undefined },
-  { name: 'Mikayla Franco', role: 'Summer Research Scholar', focus: 'Invasive Species Bioacoustic Annotation', mark: 'MF', photo: undefined as string | undefined },
+  { name: 'Isaac Cone', role: 'Summer Student', focus: 'Annotator development', mark: 'IC', photo: undefined as string | undefined },
+  { name: 'Mikayla Franco', role: 'Summer Student', focus: 'Field work and annotation', mark: 'MF', photo: undefined as string | undefined },
 ]
 
 const groups = [
