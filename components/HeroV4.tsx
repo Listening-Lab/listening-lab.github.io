@@ -57,7 +57,7 @@ export default function HeroV4() {
 
       {/* ── Right: zoomed NZ map ── */}
       <div className="absolute right-0 top-0 w-full h-full pointer-events-none">
-        <RegionMap selectedRegion="Manawatu-Wanganui" className="opacity-75"/>
+        <RegionMap selectedRegion="Manawatu-Wanganui" className="opacity-75" panX={-0.5} zoomWidthFraction={0.62}/>
       </div>
 
       {/* ── Left: text content (same as V3) ── */}
