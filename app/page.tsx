@@ -1,10 +1,9 @@
-
-import HeroV4 from '@/components/HeroV4'
-import Quote from '@/components/Quote'
-import About from '@/components/About'
-import ResearchSection from '@/components/ResearchSection'
-import CoreTeam from '@/components/CoreTeam'
-import AcousticMap from '@/components/AcousticMap'
+import HeroV4 from "@/components/HeroV4";
+import Quote from "@/components/Quote";
+import About from "@/components/About";
+import ResearchSection from "@/components/ResearchSection";
+import CoreTeam from "@/components/CoreTeam";
+import AcousticMap from "@/components/AcousticMapDemo";
 
 export default function HomePage() {
   return (
@@ -26,5 +25,5 @@ export default function HomePage() {
       </div>
       <Quote />
     </>
-  )
+  );
 }

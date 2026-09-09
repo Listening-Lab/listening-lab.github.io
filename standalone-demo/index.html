@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bird Species Explorer — Standalone Demo</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            ocean: {
+              DEFAULT: '#0d1b2a',
+              dark: '#070f18',
+              card: '#132235',
+              border: '#1e334d',
+            },
+            teal: {
+              DEFAULT: '#4ecdc4',
+              hover: '#3dbdb4',
+              glow: 'rgba(78, 205, 196, 0.15)',
+            }
+          },
+          fontFamily: {
+            serif: ['"Playfair Display"', 'Georgia', 'serif'],
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background-color: #070f18;
+      color: #e2e8f0;
+      font-family: 'Inter', sans-serif;
+    }
+    .glass-card {
+      background: rgba(19, 34, 53, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-card:hover {
+      border-color: rgba(78, 205, 196, 0.25);
+    }
+    .shimmer {
+      background: linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.8s infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-teal-500/20 selection:text-teal-300">
+
+  <!-- Header -->
+  <header class="border-b border-white/10 bg-ocean-dark/80 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-teal-DEFAULT/20 border border-teal-DEFAULT/40 flex items-center justify-center text-teal-DEFAULT font-bold text-lg">
+          🪶
+        </div>
+        <div>
+          <span class="font-serif font-bold text-white tracking-wide text-lg">Aves Explorer</span>
+          <span class="ml-2 text-xs uppercase tracking-widest text-[#4ecdc4] bg-[#4ecdc4]/10 border border-[#4ecdc4]/20 px-2 py-0.5 rounded-full font-medium">Standalone Demo</span>
+        </div>
+      </div>
+      <div class="text-xs text-gray-400 hidden sm:block">
+        Powered by Wikipedia & iNaturalist Bioacoustic APIs
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-6 py-10">
+    
+    <!-- Hero / Intro -->
+    <div class="text-center max-w-2xl mx-auto mb-10">
+      <h1 class="font-serif text-4xl sm:text-5xl text-white font-bold tracking-tight mb-4">
+        Discover Any <span class="text-[#4ecdc4]">Bird Species</span>
+      </h1>
+      <p class="text-gray-400 text-sm sm:text-base leading-relaxed">
+        Enter a species name (common, indigenous, or scientific) to instantly retrieve photographs, taxonomy, conservation status, and ecological details.
+      </p>
+    </div>
+
+    <!-- Search Box Form -->
+    <div class="max-w-3xl mx-auto mb-6">
+      <form id="searchForm" class="relative flex items-center">
+        <div class="absolute left-4 pointer-events-none text-gray-400">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+        </div>
+        <input
+          type="text"
+          id="speciesInput"
+          placeholder="Enter bird species (e.g. Kea, Tūī, Peregrine Falcon, Kākāpō, Barn Owl...)"
+          autocomplete="off"
+          class="w-full pl-12 pr-32 py-4 bg-ocean-card/90 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-[#4ecdc4] focus:ring-2 focus:ring-[#4ecdc4]/20 transition-all text-base shadow-xl"
+        />
+        <button
+          type="submit"
+          id="submitBtn"
+          class="absolute right-2.5 px-6 py-2.5 bg-[#4ecdc4] hover:bg-[#3dbdb4] text-ocean-dark font-semibold text-sm rounded-xl transition-colors flex items-center gap-2 shadow-lg hover:shadow-teal-500/20 active:scale-95"
+        >
+          <span>Search</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+          </svg>
+        </button>
+      </form>
+    </div>
+
+    <!-- Quick-Pick Presets -->
+    <div class="max-w-3xl mx-auto mb-10">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-xs uppercase tracking-wider text-gray-400 font-medium">Popular prompts:</span>
+      </div>
+      <div class="flex flex-wrap gap-2" id="presetChips">
+        <!-- Preset pills inserted by JS -->
+      </div>
+    </div>
+
+    <!-- Results Container -->
+    <div id="resultsContainer" class="max-w-4xl mx-auto transition-all">
+      <!-- Default empty state -->
+      <div id="initialState" class="glass-card rounded-2xl p-12 text-center border border-white/5">
+        <div class="text-5xl mb-4">🔍</div>
+        <h3 class="text-lg font-medium text-white mb-2">Ready to explore</h3>
+        <p class="text-sm text-gray-400 max-w-md mx-auto">
+          Type any bird species name above or select one of the suggested prompts to see its photograph, scientific profile, and bioacoustic links.
+        </p>
+      </div>
+
+      <!-- Loading skeleton -->
+      <div id="loadingState" class="hidden glass-card rounded-2xl p-8 border border-white/5">
+        <div class="grid md:grid-cols-12 gap-8">
+          <div class="md:col-span-5 aspect-[4/5] rounded-xl shimmer"></div>
+          <div class="md:col-span-7 space-y-4">
+            <div class="h-6 w-24 rounded shimmer"></div>
+            <div class="h-10 w-3/4 rounded shimmer"></div>
+            <div class="h-4 w-1/2 rounded shimmer"></div>
+            <div class="h-24 w-full rounded shimmer"></div>
+            <div class="grid grid-cols-2 gap-3 pt-4">
+              <div class="h-14 rounded shimmer"></div>
+              <div class="h-14 rounded shimmer"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error State -->
+      <div id="errorState" class="hidden glass-card rounded-2xl p-8 text-center border border-red-500/20 bg-red-950/20">
+        <div class="text-4xl mb-3">⚠️</div>
+        <h3 class="text-lg font-semibold text-white mb-2" id="errorTitle">Species Not Found</h3>
+        <p class="text-sm text-gray-300 max-w-md mx-auto mb-6" id="errorMessage">
+          We couldn't locate information for that query. Please check the spelling or try searching by common or scientific name.
+        </p>
+        <div class="flex justify-center gap-2 flex-wrap" id="errorSuggestions"></div>
+      </div>
+
+      <!-- Card Display State -->
+      <div id="cardState" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+        <div class="grid md:grid-cols-12">
+          
+          <!-- Photo Column -->
+          <div class="md:col-span-5 relative bg-black/40 flex flex-col items-center justify-center min-h-[320px] md:min-h-[460px] group overflow-hidden">
+            <img
+              id="speciesPhoto"
+              src=""
+              alt=""
+              class="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-105 cursor-pointer"
+            />
+            <!-- Photo zoom hint overlay -->
+            <div 
+              id="zoomTrigger"
+              class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer pointer-events-none"
+            >
+              <span class="bg-black/70 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur border border-white/20 flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"></path>
+                </svg>
+                Click to expand photo
+              </span>
+            </div>
+            <!-- Photo attribution / badge -->
+            <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 text-[11px] text-gray-300">
+              <div id="photoAttribution" class="truncate font-light"></div>
+            </div>
+          </div>
+
+          <!-- Info Column -->
+          <div class="md:col-span-7 p-6 sm:p-8 flex flex-col justify-between">
+            <div>
+              <!-- Top Badges -->
+              <div class="flex items-center gap-2 flex-wrap mb-3">
+                <span id="conservationStatusBadge" class="text-xs px-2.5 py-1 rounded-full font-semibold uppercase tracking-wider">
+                  Least Concern
+                </span>
+                <span id="rankBadge" class="text-xs px-2.5 py-1 rounded-full bg-white/10 text-gray-300 font-medium">
+                  Species
+                </span>
+                <span id="matchTypeBadge" class="text-xs px-2.5 py-1 rounded-full bg-teal-500/10 text-[#4ecdc4] border border-[#4ecdc4]/20">
+                  Aves (Birds)
+                </span>
+              </div>
+
+              <!-- Species Names -->
+              <h2 id="speciesCommonName" class="font-serif text-3xl sm:text-4xl font-bold text-white leading-tight">
+                Kea
+              </h2>
+              <p id="speciesScientificName" class="text-[#4ecdc4] italic font-serif text-lg mt-1 mb-4">
+                Nestor notabilis
+              </p>
+
+              <!-- Short Description Pill -->
+              <p id="speciesShortDesc" class="text-sm font-medium text-gray-300 mb-4 pb-3 border-b border-white/10">
+                Species of parrot endemic to the Southern Alps of New Zealand.
+              </p>
+
+              <!-- Detailed Extract -->
+              <div class="text-gray-300 text-sm leading-relaxed mb-6 max-h-48 overflow-y-auto pr-2" id="speciesExtract">
+                <!-- Text filled by JS -->
+              </div>
+
+              <!-- Taxonomy Grid -->
+              <div class="bg-ocean-dark/60 rounded-xl p-4 border border-white/5 mb-6">
+                <h4 class="text-xs uppercase tracking-wider text-gray-400 font-medium mb-2.5 flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 text-[#4ecdc4]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                  </svg>
+                  Taxonomic Classification
+                </h4>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs" id="taxonomyGrid">
+                  <div class="bg-white/5 rounded-lg p-2">
+                    <span class="text-gray-500 block text-[10px] uppercase">Order</span>
+                    <span id="taxOrder" class="font-medium text-white truncate block">-</span>
+                  </div>
+                  <div class="bg-white/5 rounded-lg p-2">
+                    <span class="text-gray-500 block text-[10px] uppercase">Family</span>
+                    <span id="taxFamily" class="font-medium text-white truncate block">-</span>
+                  </div>
+                  <div class="bg-white/5 rounded-lg p-2">
+                    <span class="text-gray-500 block text-[10px] uppercase">Genus</span>
+                    <span id="taxGenus" class="font-medium text-white truncate block">-</span>
+                  </div>
+                  <div class="bg-white/5 rounded-lg p-2">
+                    <span class="text-gray-500 block text-[10px] uppercase">Observations</span>
+                    <span id="taxObs" class="font-medium text-white truncate block">-</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Links -->
+            <div class="flex flex-wrap gap-2 pt-2 border-t border-white/10">
+              <a
+                id="wikiLink"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium flex items-center gap-1.5 transition-colors"
+              >
+                <span>Read on Wikipedia</span>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                </svg>
+              </a>
+              <a
+                id="inatLink"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium flex items-center gap-1.5 transition-colors"
+              >
+                <span>iNaturalist Observations</span>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                </svg>
+              </a>
+              <a
+                id="audioLink"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="px-3.5 py-2 rounded-xl bg-[#4ecdc4]/20 hover:bg-[#4ecdc4]/30 text-[#4ecdc4] border border-[#4ecdc4]/30 text-xs font-medium flex items-center gap-1.5 transition-colors"
+              >
+                <span>🔊 Listen on Xeno-Canto</span>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                </svg>
+              </a>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Fullscreen Lightbox Modal -->
+  <div id="lightboxModal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-md hidden flex flex-col items-center justify-center p-4">
+    <button id="closeLightbox" class="absolute top-6 right-6 text-white/80 hover:text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+      </svg>
+    </button>
+    <div class="max-w-5xl max-h-[85vh] flex flex-col items-center">
+      <img id="lightboxImg" src="" alt="" class="max-w-full max-h-[75vh] object-contain rounded-xl shadow-2xl mb-3">
+      <div id="lightboxCaption" class="text-sm text-gray-300 text-center font-light"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="border-t border-white/5 py-6 mt-16 text-center text-xs text-gray-500">
+    Built for bioacoustic research & species identification • Standalone Demo
+  </footer>
+
+  <!-- Application Script -->
+  <script>
+    const PRESETS = [
+      { label: "🦜 Kea", query: "Kea" },
+      { label: "🐦 Tūī", query: "Tūī" },
+      { label: "🦉 Kākāpō", query: "Kākāpō" },
+      { label: "🥝 Kiwi", query: "Kiwi" },
+      { label: "🪶 Pīwakawaka (Fantail)", query: "New Zealand fantail" },
+      { label: "🦉 Ruru (Morepork)", query: "Morepork" },
+      { label: "🦅 Peregrine Falcon", query: "Peregrine falcon" },
+      { label: "🦉 Barn Owl", query: "Barn owl" },
+      { label: "🐦 Kōtare (Kingfisher)", query: "Sacred kingfisher" },
+      { label: "🦚 Pūkeko", query: "Australasian swamphen" },
+    ];
+
+    // DOM Elements
+    const searchForm = document.getElementById('searchForm');
+    const speciesInput = document.getElementById('speciesInput');
+    const presetChips = document.getElementById('presetChips');
+    const initialState = document.getElementById('initialState');
+    const loadingState = document.getElementById('loadingState');
+    const errorState = document.getElementById('errorState');
+    const cardState = document.getElementById('cardState');
+
+    // Card Elements
+    const speciesPhoto = document.getElementById('speciesPhoto');
+    const photoAttribution = document.getElementById('photoAttribution');
+    const speciesCommonName = document.getElementById('speciesCommonName');
+    const speciesScientificName = document.getElementById('speciesScientificName');
+    const speciesShortDesc = document.getElementById('speciesShortDesc');
+    const speciesExtract = document.getElementById('speciesExtract');
+    const conservationStatusBadge = document.getElementById('conservationStatusBadge');
+    const rankBadge = document.getElementById('rankBadge');
+    const taxOrder = document.getElementById('taxOrder');
+    const taxFamily = document.getElementById('taxFamily');
+    const taxGenus = document.getElementById('taxGenus');
+    const taxObs = document.getElementById('taxObs');
+    const wikiLink = document.getElementById('wikiLink');
+    const inatLink = document.getElementById('inatLink');
+    const audioLink = document.getElementById('audioLink');
+
+    // Lightbox Elements
+    const lightboxModal = document.getElementById('lightboxModal');
+    const lightboxImg = document.getElementById('lightboxImg');
+    const lightboxCaption = document.getElementById('lightboxCaption');
+    const closeLightbox = document.getElementById('closeLightbox');
+    let highResUrl = '';
+
+    // Render Preset Pills
+    PRESETS.forEach(preset => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 hover:border-[#4ecdc4]/40 border border-white/10 text-xs text-gray-300 hover:text-white transition-all';
+      btn.textContent = preset.label;
+      btn.addEventListener('click', () => {
+        speciesInput.value = preset.query;
+        lookupSpecies(preset.query);
+      });
+      presetChips.appendChild(btn);
+    });
+
+    // Form Submit
+    searchForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const query = speciesInput.value.trim();
+      if (query) {
+        lookupSpecies(query);
+      }
+    });
+
+    // Lightbox Open & Close
+    speciesPhoto.addEventListener('click', () => {
+      if (highResUrl) {
+        lightboxImg.src = highResUrl;
+        lightboxCaption.textContent = `${speciesCommonName.textContent} (${speciesScientificName.textContent}) — ${photoAttribution.textContent}`;
+        lightboxModal.classList.remove('hidden');
+      }
+    });
+    closeLightbox.addEventListener('click', () => lightboxModal.classList.add('hidden'));
+    lightboxModal.addEventListener('click', (e) => {
+      if (e.target === lightboxModal) lightboxModal.classList.add('hidden');
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') lightboxModal.classList.add('hidden');
+    });
+
+    function showState(state) {
+      initialState.classList.add('hidden');
+      loadingState.classList.add('hidden');
+      errorState.classList.add('hidden');
+      cardState.classList.add('hidden');
+
+      if (state === 'initial') initialState.classList.remove('hidden');
+      if (state === 'loading') loadingState.classList.remove('hidden');
+      if (state === 'error') errorState.classList.remove('hidden');
+      if (state === 'card') cardState.classList.remove('hidden');
+    }
+
+    function normalizeText(text) {
+      if (!text) return '';
+      return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    }
+
+    async function lookupSpecies(query) {
+      showState('loading');
+
+      try {
+        // Step 1: Query Wikipedia first to get canonical title and summary
+        const wikiData = await fetchWikipedia(query);
+        const wikiTitle = wikiData?.title;
+
+        // Step 2: Query iNaturalist with query + fallback to Wikipedia title
+        const inatData = await fetchINaturalist(query, wikiTitle);
+
+        if (!inatData && !wikiData) {
+          showError("Species not found", `We could not find records for "${query}". Try searching for another bird name like Kea, Kiwi, or Falcon.`);
+          return;
+        }
+
+        renderResult(query, inatData, wikiData);
+      } catch (err) {
+        console.error("Error fetching species:", err);
+        showError("Lookup Error", "An error occurred while communicating with species databases. Please try again.");
+      }
+    }
+
+    async function fetchINaturalist(query, wikiTitle = null) {
+      const queriesToTry = [query];
+      if (wikiTitle && wikiTitle.toLowerCase() !== query.toLowerCase()) {
+        queriesToTry.push(wikiTitle);
+      }
+
+      const normQ = normalizeText(query);
+
+      for (const qTry of queriesToTry) {
+        try {
+          const url = `https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(qTry)}&taxon_id=3&per_page=10`;
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (!data.results || data.results.length === 0) continue;
+
+          // 1. Exact normalized match on preferred common name or scientific name
+          const exact = data.results.find(r => {
+            const common = normalizeText(r.preferred_common_name);
+            const sci = normalizeText(r.name);
+            return normQ === common || normQ === sci;
+          });
+          if (exact) return exact;
+
+          // 2. Partial match on common name with species rank
+          const partialSpecies = data.results.find(r => {
+            const common = normalizeText(r.preferred_common_name);
+            return common.includes(normQ) && (r.rank === 'species' || r.rank === 'subspecies');
+          });
+          if (partialSpecies) return partialSpecies;
+
+          // 3. Any species or subspecies rank
+          const speciesRank = data.results.find(r => r.rank === 'species' || r.rank === 'subspecies');
+          if (speciesRank) return speciesRank;
+
+          return data.results[0];
+        } catch (e) {
+          console.warn("iNaturalist fetch failed for", qTry, e);
+        }
+      }
+      return null;
+    }
+
+    async function fetchWikipedia(query) {
+      try {
+        // Step 1: Direct summary check
+        let summaryRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`);
+        if (summaryRes.ok) {
+          const json = await summaryRes.json();
+          // Verify it has an extract and is not a disambiguation
+          if (json.extract && json.type !== 'disambiguation') {
+            return json;
+          }
+        }
+
+        // Step 2: OpenSearch / Search for bird query
+        const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query + ' bird')}&format=json&origin=*`;
+        const searchRes = await fetch(searchUrl);
+        if (searchRes.ok) {
+          const searchJson = await searchRes.json();
+          const items = searchJson.query?.search;
+          if (items && items.length > 0) {
+            const bestTitle = items[0].title;
+            const detailRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(bestTitle)}`);
+            if (detailRes.ok) {
+              const detailJson = await detailRes.json();
+              if (detailJson.extract) return detailJson;
+            }
+          }
+        }
+        return null;
+      } catch (e) {
+        console.warn("Wikipedia fetch failed:", e);
+        return null;
+      }
+    }
+
+    function renderResult(query, inat, wiki) {
+      // 1. Common Name & Scientific Name
+      const commonName = inat?.preferred_common_name || wiki?.title || query;
+      const scientificName = inat?.name || (wiki?.description?.includes('bird') ? '' : wiki?.description) || '';
+
+      speciesCommonName.textContent = commonName;
+      speciesScientificName.textContent = scientificName || (inat?.name || '');
+
+      // 2. Short description & extract
+      speciesShortDesc.textContent = wiki?.description || (inat?.rank ? `${capitalize(inat?.rank || 'Species')} in the class Aves` : 'Bird species');
+      speciesExtract.textContent = wiki?.extract || "Information retrieved from the global biodiversity and bioacoustic taxonomic index.";
+
+      // 3. Photo & High-Res Lightbox
+      let photoUrl = '';
+      let attributionText = '';
+      if (wiki?.originalimage?.source) {
+        photoUrl = wiki.originalimage.source;
+        highResUrl = wiki.originalimage.source;
+        attributionText = "Photo via Wikimedia Commons";
+      } else if (wiki?.thumbnail?.source) {
+        photoUrl = wiki.thumbnail.source;
+        highResUrl = wiki.thumbnail.source;
+        attributionText = "Photo via Wikipedia";
+      } else if (inat?.default_photo?.medium_url) {
+        photoUrl = inat.default_photo.medium_url;
+        highResUrl = inat.default_photo.url ? inat.default_photo.url.replace('square', 'original') : inat.default_photo.medium_url;
+        attributionText = inat.default_photo.attribution || "Photo via iNaturalist";
+      } else {
+        photoUrl = "https://images.unsplash.com/photo-1444464666168-49d633b86797?w=800&auto=format&fit=crop&q=80";
+        highResUrl = photoUrl;
+        attributionText = "Representative bird photograph";
+      }
+
+      speciesPhoto.src = photoUrl;
+      speciesPhoto.alt = `${commonName} photograph`;
+      photoAttribution.textContent = attributionText;
+
+      // 4. Conservation status badge
+      const status = inat?.conservation_status?.status_name || (wiki?.extract && wiki.extract.toLowerCase().includes('critically endangered') ? 'Critically Endangered' : (wiki?.extract && wiki.extract.toLowerCase().includes('endangered') ? 'Endangered' : (wiki?.extract && wiki.extract.toLowerCase().includes('vulnerable') ? 'Vulnerable' : 'Least Concern')));
+      formatStatusBadge(status);
+
+      // 5. Taxonomy breakdown
+      rankBadge.textContent = capitalize(inat?.rank || 'Species');
+      
+      taxOrder.textContent = getTaxonRank(inat, 'order') || '-';
+      taxFamily.textContent = getTaxonRank(inat, 'family') || '-';
+      taxGenus.textContent = getTaxonRank(inat, 'genus') || (scientificName ? scientificName.split(' ')[0] : '-');
+      taxObs.textContent = inat?.observations_count ? inat.observations_count.toLocaleString() : '1,000+';
+
+      // 6. External Links
+      const wikiPageUrl = wiki?.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(commonName)}`;
+      wikiLink.href = wikiPageUrl;
+
+      const inatPageUrl = inat?.id ? `https://www.inaturalist.org/taxa/${inat.id}` : `https://www.inaturalist.org/search?q=${encodeURIComponent(commonName)}`;
+      inatLink.href = inatPageUrl;
+
+      // Xeno-Canto sound recording search link
+      const soundQuery = scientificName || commonName;
+      audioLink.href = `https://xeno-canto.org/explore?query=${encodeURIComponent(soundQuery)}`;
+
+      showState('card');
+    }
+
+    function formatStatusBadge(status) {
+      const s = status.toLowerCase();
+      let colorClasses = "bg-teal-500/20 text-teal-300 border border-teal-500/30";
+      if (s.includes('critically') || s.includes('extinct')) {
+        colorClasses = "bg-red-500/20 text-red-300 border border-red-500/30";
+      } else if (s.includes('endangered') || s.includes('threatened')) {
+        colorClasses = "bg-amber-500/20 text-amber-300 border border-amber-500/30";
+      } else if (s.includes('vulnerable') || s.includes('near')) {
+        colorClasses = "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30";
+      }
+      conservationStatusBadge.className = `text-xs px-2.5 py-1 rounded-full font-semibold uppercase tracking-wider ${colorClasses}`;
+      conservationStatusBadge.textContent = status;
+    }
+
+    function getTaxonRank(inat, rankName) {
+      if (!inat) return null;
+      if (inat.rank === rankName) return inat.name;
+      if (inat.ancestors && Array.isArray(inat.ancestors)) {
+        const found = inat.ancestors.find(a => a.rank === rankName);
+        if (found) return found.name;
+      }
+      return null;
+    }
+
+    function capitalize(str) {
+      if (!str) return '';
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    function showError(title, message) {
+      document.getElementById('errorTitle').textContent = title;
+      document.getElementById('errorMessage').textContent = message;
+      const suggestions = document.getElementById('errorSuggestions');
+      suggestions.innerHTML = '';
+
+      ['Kea', 'Tūī', 'Fantail', 'Peregrine Falcon'].forEach(suggest => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-xs text-white';
+        btn.textContent = `Try "${suggest}"`;
+        btn.addEventListener('click', () => {
+          speciesInput.value = suggest;
+          lookupSpecies(suggest);
+        });
+        suggestions.appendChild(btn);
+      });
+
+      showState('error');
+    }
+
+    // Run initial search for Kea as an attractive demonstration default
+    lookupSpecies("Kea");
+  </script>
+</body>
+</html>
