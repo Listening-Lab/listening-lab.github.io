@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import AudioUploadModal from './AudioUploadModal'
+import { ClassificationResult } from '@/lib/perchClient'
 
 // ─── config ──────────────────────────────────────────────────────────────────
 
@@ -66,6 +68,10 @@ export interface AppData {
   recordings: Recording[]
   speciesColors: string[]
   speciesKeys: string[]
+  referenceCentroids?: Map<string, [number, number, number]>
+  uxMid?: number
+  uyMid?: number
+  uzMid?: number
 }
 
 export interface SpeciesDetails {
@@ -171,7 +177,20 @@ async function loadData(): Promise<AppData> {
     '#' + new THREE.Color().setHSL(i / nSp, 0.75, 0.65).getHexString()
   )
 
-  return { regions, recordings: recs, speciesColors, speciesKeys }
+  const referenceCentroids = new Map<string, [number, number, number]>()
+  const speciesCounts = new Map<string, number>()
+  recs.forEach(r => {
+    const k = `${r.genus.toLowerCase()}_${r.species.toLowerCase()}`
+    const existing = referenceCentroids.get(k) || [0, 0, 0]
+    referenceCentroids.set(k, [existing[0] + r.umapX, existing[1] + r.umapY, existing[2] + r.umapZ])
+    speciesCounts.set(k, (speciesCounts.get(k) || 0) + 1)
+  })
+  referenceCentroids.forEach((coords, k) => {
+    const count = speciesCounts.get(k) || 1
+    referenceCentroids.set(k, [coords[0] / count, coords[1] / count, coords[2] / count])
+  })
+
+  return { regions, recordings: recs, speciesColors, speciesKeys, referenceCentroids, uxMid, uyMid, uzMid }
 }
 
 // ─── shared shaders ──────────────────────────────────────────────────────────
@@ -659,6 +678,11 @@ function initThree(
   })
   rightScene.add(new THREE.Points(rightGeo, rightMat))
 
+  // User uploaded points group
+  const userGroup = new THREE.Group()
+  rightScene.add(userGroup)
+  const userMeshes: THREE.Mesh[] = []
+
   const rightRaycaster = new THREE.Raycaster()
   rightRaycaster.params.Points = { threshold: UMAP_RAYCASTER_THRESHOLD }
   const rightMouse2D = new THREE.Vector2(-9999, -9999)
@@ -820,6 +844,15 @@ function initThree(
       }
     }
 
+    // Animate user rings (billboard & pulse)
+    userGroup.children.forEach((child, i) => {
+      if (child instanceof THREE.Mesh && child.geometry instanceof THREE.RingGeometry) {
+        const pulse = 1.0 + 0.22 * Math.sin(t * 3.5 + i)
+        child.scale.set(pulse, pulse, pulse)
+        child.lookAt(rightCam.position)
+      }
+    })
+
     rightControls.update()
     rightRenderer.render(rightScene, rightCam)
   }
@@ -837,11 +870,55 @@ function initThree(
   const resizeObserver = new ResizeObserver(onResize)
   resizeObserver.observe(leftEl)
   resizeObserver.observe(rightEl)
+  const addUserPoint = (rec: ClassificationResult) => {
+    // 1. Glowing marker sphere
+    const sphereGeom = new THREE.SphereGeometry(0.16, 24, 24)
+    const sphereMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#4ecdc4'),
+    })
+    const sphere = new THREE.Mesh(sphereGeom, sphereMat)
+    sphere.position.set(rec.umapCoords[0], rec.umapCoords[1], rec.umapCoords[2])
+    sphere.userData = { userRec: rec }
+    userGroup.add(sphere)
+    userMeshes.push(sphere)
 
+    // 2. Pulsing outer halo ring
+    const ringGeom = new THREE.RingGeometry(0.24, 0.36, 32)
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#ffe66d'),
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending,
+    })
+    const ring = new THREE.Mesh(ringGeom, ringMat)
+    ring.position.copy(sphere.position)
+    userGroup.add(ring)
+
+    // 3. Smoothly animate camera target to focus on new point
+    const startTarget = rightControls.target.clone()
+    const endTarget = sphere.position.clone()
+    let lerpProgress = 0
+    const lerpTimer = setInterval(() => {
+      lerpProgress += 0.05
+      rightControls.target.lerpVectors(startTarget, endTarget, lerpProgress)
+      if (lerpProgress >= 1) clearInterval(lerpTimer)
+    }, 16)
+
+    // 4. Spawn ripple on map
+    if (typeof rec.lat === 'number' && typeof rec.lon === 'number') {
+      const [wx, wy] = ll2w(rec.lon, rec.lat)
+      spawnRipple(wx, wy, '#4ecdc4', -999)
+      setTimeout(() => spawnRipple(wx, wy, '#ffe66d', -999), 350)
+    }
+  }
+
+  // expose updateSelection, setMuted, addUserPoint so React can call them
   ;(leftEl as any).__updateSelection = updateSelection
   ;(rightEl as any).__setMuted = (m: boolean) => {
     activeAudio.forEach(entry => { entry.el.muted = m })
   }
+  ;(rightEl as any).__addUserPoint = addUserPoint
 
   return () => {
     cancelAnimationFrame(leftAnimId)
@@ -955,8 +1032,16 @@ export default function AcousticMapDemo() {
   const [isMobile, setIsMobile] = useState(false)
   const [activePanel, setActivePanel] = useState<'map' | 'umap'>('map')
   const [mapEngaged, setMapEngaged] = useState(false)
-  const [umapEngaged, setUmapEngaged] = useState(false)
   const [legendOpen, setLegendOpen] = useState(false)
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const [userRecordings, setUserRecordings] = useState<ClassificationResult[]>([])
+
+  const handleClassifiedAudio = (result: ClassificationResult) => {
+    setUserRecordings(prev => [...prev, result])
+    if ((rightRef.current as any)?.__addUserPoint) {
+      ;(rightRef.current as any).__addUserPoint(result)
+    }
+  }
 
   // Species popup & pointer preview state
   const [selectedPoint, setSelectedPoint] = useState<Recording | null>(null)
@@ -1230,6 +1315,18 @@ export default function AcousticMapDemo() {
               ? <>Filtered to <span className="text-white">{selectedRegion.name}</span> — click elsewhere on the map to return</>
               : 'Drag to orbit the 3D embedding space. Click any point to select species.'}
           </p>
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="bg-[#4ecdc4]/20 hover:bg-[#4ecdc4]/35 backdrop-blur-md border border-[#4ecdc4]/60 rounded-full px-5 py-2 text-xs font-semibold text-white transition-all shadow-lg shadow-[#4ecdc4]/20 flex items-center gap-2 cursor-pointer"
+              title="Upload audio to classify with Perch v2 and add to 3D map"
+            >
+              <svg className="w-4 h-4 text-[#4ecdc4]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z" />
+              </svg>
+              <span>Upload Audio &amp; Classify</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1671,6 +1768,16 @@ export default function AcousticMapDemo() {
           </p>
         </div>
       )}
+
+      {/* Audio Upload & Classification Modal */}
+      <AudioUploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        defaultLat={-41.2}
+        defaultLon={172.5}
+        referenceCentroids={dataRef?.referenceCentroids}
+        onClassified={handleClassifiedAudio}
+      />
 
     </section>
   )

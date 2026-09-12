@@ -26,3 +26,8 @@ next-env.d.ts
 
 # mac filesystem
 .DS_Store
+
+# local inference sidecar
+perch-local/data/edna/records.csv
+perch-local/
+.env.local
