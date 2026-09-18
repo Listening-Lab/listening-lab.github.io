@@ -1032,6 +1032,7 @@ export default function AcousticMapDemo() {
   const [isMobile, setIsMobile] = useState(false)
   const [activePanel, setActivePanel] = useState<'map' | 'umap'>('map')
   const [mapEngaged, setMapEngaged] = useState(false)
+  const [umapEngaged, setUmapEngaged] = useState(false)
   const [legendOpen, setLegendOpen] = useState(false)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [userRecordings, setUserRecordings] = useState<ClassificationResult[]>([])

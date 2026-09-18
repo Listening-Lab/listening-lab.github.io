@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # NEXT_PUBLIC_* config (Firebase web config, API base URL) is not secret and lives in
+      # the committed .env, which Next.js reads automatically at build time — no CI secrets
+      # needed here. Update .env directly when the Nature Commons API URL is ready.
       - name: Build
         run: npm run build
 

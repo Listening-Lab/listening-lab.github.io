@@ -1032,6 +1032,7 @@ export default function AcousticMapDemo() {
   const [isMobile, setIsMobile] = useState(false)
   const [activePanel, setActivePanel] = useState<'map' | 'umap'>('map')
   const [mapEngaged, setMapEngaged] = useState(false)
+  const [umapEngaged, setUmapEngaged] = useState(false)
   const [legendOpen, setLegendOpen] = useState(false)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [userRecordings, setUserRecordings] = useState<ClassificationResult[]>([])
@@ -1306,7 +1307,7 @@ export default function AcousticMapDemo() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#4ecdc4]/10 border border-[#4ecdc4]/20 text-[#4ecdc4] text-xs uppercase tracking-widest font-semibold mb-3">
             <span>✨ Interactive Species Demo</span>
           </div>
-          <h1 className="font-serif text-4xl md:text-5xl mb-3">Acoustic Map of Aotearoa</h1>
+          <h1 className="font-serif text-4xl md:text-5xl mb-3">Sound Map of Aotearoa</h1>
           <p className="text-gray-200 max-w-xl pb-2 mx-auto text-sm">
             Click any point in the Point Map to listen to its vocalisation and inspect species photographs and biology below.
           </p>
