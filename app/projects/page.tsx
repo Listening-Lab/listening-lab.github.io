@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import RequireAuth from '@/lib/auth/RequireAuth'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { listProjects, type Project } from '@/lib/apiClient'
@@ -43,12 +44,20 @@ function ProjectList() {
             {projects.map((project) => (
               <li
                 key={project.id}
-                className="bg-white/5 border border-white/10 rounded-lg px-5 py-4"
+                className="bg-white/5 border border-white/10 rounded-lg px-5 py-4 flex items-center justify-between gap-4"
               >
-                <p className="text-white font-medium">{project.name}</p>
-                {project.description && (
-                  <p className="text-gray-400 text-sm mt-1">{project.description}</p>
-                )}
+                <div>
+                  <p className="text-white font-medium">{project.name}</p>
+                  {project.description && (
+                    <p className="text-gray-400 text-sm mt-1">{project.description}</p>
+                  )}
+                </div>
+                <Link
+                  href={`/projects/upload?projectId=${encodeURIComponent(project.id)}`}
+                  className="shrink-0 bg-white/10 text-white border border-white/20 px-4 py-2 rounded-full text-sm font-medium hover:bg-white/20 transition-colors"
+                >
+                  Upload
+                </Link>
               </li>
             ))}
           </ul>
