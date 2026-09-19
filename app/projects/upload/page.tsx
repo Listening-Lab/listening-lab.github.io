@@ -135,12 +135,20 @@ function UploadForm() {
           </div>
 
           {(job?.status === 'complete' || job?.status === 'failed' || pollError) && (
-            <button
-              onClick={reset}
-              className="bg-white/10 text-white border border-white/20 px-6 py-2.5 rounded-full text-sm font-medium hover:bg-white/20 transition-colors"
-            >
-              Upload another
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={reset}
+                className="bg-white/10 text-white border border-white/20 px-6 py-2.5 rounded-full text-sm font-medium hover:bg-white/20 transition-colors"
+              >
+                Upload another
+              </button>
+              <Link
+                href={`/projects/files?projectId=${encodeURIComponent(projectId as string)}`}
+                className="text-sm text-gray-300 hover:text-white transition-colors underline"
+              >
+                View in Files
+              </Link>
+            </div>
           )}
         </div>
       )}

@@ -47,7 +47,16 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '')
-    throw new ApiError(response.status, errText || response.statusText)
+    let message = errText || response.statusText
+    if (errText) {
+      try {
+        const parsed = JSON.parse(errText)
+        if (typeof parsed?.detail === 'string') message = parsed.detail
+      } catch {
+        // Not JSON — keep the raw text.
+      }
+    }
+    throw new ApiError(response.status, message)
   }
 
   if (response.status === 204) {
@@ -57,14 +66,70 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
   return response.json() as Promise<T>
 }
 
+export type ProjectRole = 'admin' | 'member'
+
 export interface Project {
   id: string
   name: string
   description?: string
+  isPublic: boolean
+  role: ProjectRole
 }
 
 export function listProjects(): Promise<Project[]> {
   return apiFetch<Project[]>('/v1/projects')
+}
+
+export interface CreateProjectPayload {
+  name: string
+  description?: string
+}
+
+/** Creates a new private project. The caller becomes its admin. */
+export function createProject(payload: CreateProjectPayload): Promise<Project> {
+  return apiFetch<Project>('/v1/projects', {
+    method: 'POST',
+    body: payload,
+  })
+}
+
+export interface Member {
+  userId: string
+  email: string
+  role: ProjectRole
+}
+
+export function listMembers(projectId: string): Promise<Member[]> {
+  return apiFetch<Member[]>(`/v1/projects/${projectId}/members`)
+}
+
+/** 404s if the given email has never signed in to the app. */
+export function addMember(
+  projectId: string,
+  payload: { email: string; role?: ProjectRole }
+): Promise<Member> {
+  return apiFetch<Member>(`/v1/projects/${projectId}/members`, {
+    method: 'POST',
+    body: payload,
+  })
+}
+
+export function updateMemberRole(
+  projectId: string,
+  userId: string,
+  role: ProjectRole
+): Promise<Member> {
+  return apiFetch<Member>(`/v1/projects/${projectId}/members/${userId}`, {
+    method: 'PATCH',
+    body: { role },
+  })
+}
+
+/** Rejected if this would leave the project with zero admins. */
+export function removeMember(projectId: string, userId: string): Promise<void> {
+  return apiFetch<void>(`/v1/projects/${projectId}/members/${userId}`, {
+    method: 'DELETE',
+  })
 }
 
 export interface UploadUrlResponse {
@@ -136,6 +201,91 @@ export interface Job {
 
 export function getJob(jobId: string): Promise<Job> {
   return apiFetch<Job>(`/v1/jobs/${jobId}`)
+}
+
+export interface Asset {
+  id: string
+  filename: string
+  contentType: string
+  folder: string | null
+  lat: number | null
+  lon: number | null
+  recordedAt: string | null
+  durationSeconds: number | null
+  createdAt: string
+  latestJobId: string | null
+  latestJobStatus: JobStatus | null
+}
+
+export function listAssets(
+  projectId: string,
+  options: { folder?: string; limit?: number } = {}
+): Promise<Asset[]> {
+  const params = new URLSearchParams()
+  if (options.folder !== undefined) params.set('folder', options.folder)
+  if (options.limit !== undefined) params.set('limit', String(options.limit))
+  const qs = params.toString()
+  return apiFetch<Asset[]>(`/v1/projects/${projectId}/assets${qs ? `?${qs}` : ''}`)
+}
+
+export function getAsset(projectId: string, assetId: string): Promise<Asset> {
+  return apiFetch<Asset>(`/v1/projects/${projectId}/assets/${assetId}`)
+}
+
+export interface AssetUpdatePayload {
+  filename?: string
+  folder?: string | null
+  lat?: number
+  lon?: number
+  recordedAt?: string
+}
+
+export function updateAsset(
+  projectId: string,
+  assetId: string,
+  patch: AssetUpdatePayload
+): Promise<Asset> {
+  return apiFetch<Asset>(`/v1/projects/${projectId}/assets/${assetId}`, {
+    method: 'PATCH',
+    body: patch,
+  })
+}
+
+/** Hard, irreversible delete — removes the DB record and the original file from storage. */
+export function deleteAsset(projectId: string, assetId: string): Promise<void> {
+  return apiFetch<void>(`/v1/projects/${projectId}/assets/${assetId}`, {
+    method: 'DELETE',
+  })
+}
+
+/** Distinct folder paths currently in use for this project, for a folder picker/tree. */
+export function listFolders(projectId: string): Promise<string[]> {
+  return apiFetch<string[]>(`/v1/projects/${projectId}/folders`)
+}
+
+export interface Detection {
+  id: string
+  assetId: string
+  modelVersion: string
+  offsetSeconds: number
+  windowSeconds: number
+  speciesCode: string
+  score: number
+  lat: number | null
+  lon: number | null
+}
+
+export function listDetections(
+  projectId: string,
+  options: { assetId?: string; species?: string; minScore?: number; limit?: number } = {}
+): Promise<Detection[]> {
+  const params = new URLSearchParams()
+  if (options.assetId !== undefined) params.set('asset_id', options.assetId)
+  if (options.species !== undefined) params.set('species', options.species)
+  if (options.minScore !== undefined) params.set('min_score', String(options.minScore))
+  if (options.limit !== undefined) params.set('limit', String(options.limit))
+  const qs = params.toString()
+  return apiFetch<Detection[]>(`/v1/projects/${projectId}/detections${qs ? `?${qs}` : ''}`)
 }
 
 /**
