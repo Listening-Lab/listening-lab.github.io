@@ -101,10 +101,22 @@ function ProjectRow({ project }: { project: Project }) {
       </div>
       <div className="shrink-0 flex items-center gap-2">
         <Link
+          href={`/projects/map?projectId=${encodeURIComponent(project.id)}`}
+          className="bg-white/10 text-white border border-white/20 px-4 py-2 rounded-full text-sm font-medium hover:bg-white/20 transition-colors"
+        >
+          Map
+        </Link>
+        <Link
           href={`/projects/files?projectId=${encodeURIComponent(project.id)}`}
           className="bg-white/10 text-white border border-white/20 px-4 py-2 rounded-full text-sm font-medium hover:bg-white/20 transition-colors"
         >
           Files
+        </Link>
+        <Link
+          href={`/projects/labeling?projectId=${encodeURIComponent(project.id)}`}
+          className="bg-white/10 text-white border border-white/20 px-4 py-2 rounded-full text-sm font-medium hover:bg-white/20 transition-colors"
+        >
+          Label
         </Link>
         <Link
           href={`/projects/upload?projectId=${encodeURIComponent(project.id)}`}

@@ -263,6 +263,15 @@ export function listFolders(projectId: string): Promise<string[]> {
   return apiFetch<string[]>(`/v1/projects/${projectId}/folders`)
 }
 
+export interface DownloadUrlResponse {
+  downloadUrl: string
+}
+
+/** Short-lived signed GET URL for an existing asset's audio, for playback. */
+export function getAssetDownloadUrl(projectId: string, assetId: string): Promise<DownloadUrlResponse> {
+  return apiFetch<DownloadUrlResponse>(`/v1/projects/${projectId}/assets/${assetId}/download-url`)
+}
+
 export interface Detection {
   id: string
   assetId: string
@@ -286,6 +295,146 @@ export function listDetections(
   if (options.limit !== undefined) params.set('limit', String(options.limit))
   const qs = params.toString()
   return apiFetch<Detection[]>(`/v1/projects/${projectId}/detections${qs ? `?${qs}` : ''}`)
+}
+
+export type LabelValue = 'present' | 'absent' | 'uncertain'
+
+export interface Label {
+  id: string
+  assetId: string
+  offsetSeconds: number
+  windowSeconds: number
+  speciesCode: string
+  value: LabelValue
+  labeledBy: string
+  createdAt: string
+}
+
+export function listLabels(
+  projectId: string,
+  options: { assetId?: string; species?: string; limit?: number } = {}
+): Promise<Label[]> {
+  const params = new URLSearchParams()
+  if (options.assetId !== undefined) params.set('asset_id', options.assetId)
+  if (options.species !== undefined) params.set('species', options.species)
+  if (options.limit !== undefined) params.set('limit', String(options.limit))
+  const qs = params.toString()
+  return apiFetch<Label[]>(`/v1/projects/${projectId}/labels${qs ? `?${qs}` : ''}`)
+}
+
+export interface CreateLabelPayload {
+  assetId: string
+  offsetSeconds: number
+  windowSeconds: number
+  speciesCode: string
+  value: LabelValue
+}
+
+export function createLabel(projectId: string, payload: CreateLabelPayload): Promise<Label> {
+  return apiFetch<Label>(`/v1/projects/${projectId}/labels`, {
+    method: 'POST',
+    body: payload,
+  })
+}
+
+// Same list for every project on a given model_version - it's the model's fixed class
+// list, not project-specific data - so it's safe to cache in the browser across
+// projects/sessions rather than refetching ~340KB of JSON (compressed by the API's
+// GZip middleware, but still a full round trip) every time the labeling page loads.
+const SPECIES_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+
+function speciesCacheKey(modelVersion: string): string {
+  return `nc:species:${modelVersion}`
+}
+
+function readSpeciesCache(modelVersion: string): string[] | null {
+  try {
+    const raw = localStorage.getItem(speciesCacheKey(modelVersion))
+    if (!raw) return null
+    const { species, cachedAt } = JSON.parse(raw) as { species: string[]; cachedAt: number }
+    if (Date.now() - cachedAt > SPECIES_CACHE_TTL_MS) return null
+    return species
+  } catch {
+    return null // corrupt entry, storage disabled, etc. - just refetch
+  }
+}
+
+function writeSpeciesCache(modelVersion: string, species: string[]) {
+  try {
+    localStorage.setItem(speciesCacheKey(modelVersion), JSON.stringify({ species, cachedAt: Date.now() }))
+  } catch {
+    // storage full/disabled - caching is a pure optimization, nothing to fall back to
+  }
+}
+
+/**
+ * The full class list a Perch model can predict (~14,795 scientific names for
+ * perch_v2) — for the labeling UI's species search, distinct from a window's top-5
+ * `detection` preview. Empty if no job has completed in this project yet (the worker
+ * writes this file lazily, once per bucket).
+ */
+export async function listSpecies(projectId: string, modelVersion = 'perch_v2'): Promise<string[]> {
+  const cached = readSpeciesCache(modelVersion)
+  if (cached) return cached
+  const params = new URLSearchParams({ model_version: modelVersion })
+  const species = await apiFetch<string[]>(`/v1/projects/${projectId}/species?${params}`)
+  if (species.length > 0) writeSpeciesCache(modelVersion, species)
+  return species
+}
+
+export type RegionKind = 'drawn' | 'nz_admin'
+
+export interface Region {
+  id: string
+  kind: RegionKind
+  name: string
+  color: string
+  /** Set only for `kind: 'drawn'` — a GeoJSON Polygon or MultiPolygon. */
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null
+  /** Set only for `kind: 'nz_admin'` — id into the frontend's own NZ-regions dataset. */
+  nzRegionRef: string | null
+  createdAt: string
+}
+
+export function listRegions(projectId: string): Promise<Region[]> {
+  return apiFetch<Region[]>(`/v1/projects/${projectId}/regions`)
+}
+
+export interface CreateRegionPayload {
+  kind: RegionKind
+  name: string
+  color: string
+  geometry?: GeoJSON.Polygon | GeoJSON.MultiPolygon
+  nzRegionRef?: string
+}
+
+export function createRegion(projectId: string, payload: CreateRegionPayload): Promise<Region> {
+  return apiFetch<Region>(`/v1/projects/${projectId}/regions`, {
+    method: 'POST',
+    body: payload,
+  })
+}
+
+export interface UpdateRegionPayload {
+  name?: string
+  geometry?: GeoJSON.Polygon | GeoJSON.MultiPolygon
+}
+
+export function updateRegion(
+  projectId: string,
+  regionId: string,
+  patch: UpdateRegionPayload
+): Promise<Region> {
+  return apiFetch<Region>(`/v1/projects/${projectId}/regions/${regionId}`, {
+    method: 'PATCH',
+    body: patch,
+  })
+}
+
+export function deleteRegion(projectId: string, regionId: string): Promise<void> {
+  return apiFetch<void>(`/v1/projects/${projectId}/regions/${regionId}`, {
+    method: 'DELETE',
+  })
 }
 
 /**

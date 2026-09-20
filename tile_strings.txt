@@ -1,0 +1,207 @@
+boundary
+O1K=9K)1
+="1*1>!@
+@">.88,>"L
+2',1
+M#?
+W1M15A+;
+'539G)!3
+5*E
+K/G51];U
+S4/0
+*),
+,2^
+"J:*0:*
+$L@,@86
+>&82..>
+ *&$d
+.$@6B
+&FF&4
+:*6>>Nd:Xj
+~0v(>*,
+xLj
+c$WP
+adm0_l
+admin_level
+disputed
+maritime"
+NZL"
+landuse
+class"
+residential(
+park
+"12
+G1Y
+/R'
+class
+name
+name:ar
+name:cs
+name:de
+name:en
+name:es
+name:fr
+name:ja
+name:latin
+name:mk
+name:nl
+name:ru
+name:sk
+name:uk
+name:zh
+name_de
+name_en
+name_int
+rank"
+national_park"
+Tongariro National Park",
+rodn
+ park Tongariro"
+Tongariro-Nationalpark"
+Parque Nacional de Tongariro"
+Parc national de Tongariro"
+Nationaal park Tongariro"6
+ park Tongariro"6
+Whanganui National Park"
+ park Whanganui"
+Whanganui-Nationalpark"
+Parque nacional de Whanganui"
+Parc national de Whanganui"
+Nationaal park Whanganui"4
+marine_park"
+Norfolk Marine Park"
+Norfolkov n
+morn
+ park"
+australian_marine_park"
+recreation_reserve"
+Te Paki Recreation Reserve"
+Te Papa-Kura-o-Taranaki"
+scenic_reserve"
+Mokaikai Scenic Reserve"
+conservation_park"
+Ruahine Forest Park"
+Tangihua Forest"
+Kaih
+ Forest"
+Marlborough Forest"
+Waipoua Forest"
+Pureora Forest Park",
+*Whirinaki Te Pua-a-T
+ne Conservation Park"
+Kaimanawa Forest Park"
+Rauk
+mara Conservation Park"
+Tararua Forest Park"
+Kaweka Forest Park"!
+Kaimai Mamaku Conservation Park"
+Coromandel Forest Park"
+Herekino Forest"
+Raetea Forest"
+Warawara Forest"
+Russell Forest"
+Waim
+Mataraua Forest"
+mahuta Forest"
+pua Forest"
+Puket
+ Forest" 
+Mangamuka Gorge Scenic Reserve"
+stewardship_area"
+Pouto North Conservation Area"
+Pouto Conservation Area"
+Papakanui Conservation Area"
+marine_reserve"
+Mimiwhangata R
+hui Tapu(
+place
+E E!E"E#E$E%N&O'E(E)P*E+E,E
+Q-R.S/T0U
+E1V
+I2W3E4E5E6X7E8E9E
+I:E;J<E=Y>Z?[@E
+IA\BE
+rank
+name:zh-Hans
+name:zh-Hant
+name:bn
+name:am
+name:az
+name:be
+name:bg
+name:br
+name:ca
+name:cy
+name:da
+name:el
+name:eo
+name:et
+name:eu
+name:fi
+name:fy
+name:ga
+name:gd
+name:he
+name:hi
+name:hr
+name:hu
+name:hy
+name:id
+name:is
+name:it
+name:ka
+name:kn
+name:ko
+name:la
+name:lv
+name:ml
+name:no
+name:oc
+name:pa
+name:pl
+name:pt
+name:ro
+name:sr
+name:sv
+name:ta
+name:te
+name:th
+name:tr
+name:ur
+name:vi"
+town"
+Taup
+city"
+Rotorua"
+Palmerston North"
+Napier"
+Hastings"
+Levin"
+Whanganui"
+New Plymouth"
+Tauranga"
+Gisborne"
+Hamilton" 
+Masterton"
+Whang
+rei"
+Whakat
+ne"
+Auckland"(
+Okl
+nd"
+klando"
+Aucopolis"
+Oklenda"
+transportation
+ -D
+trunk"
+trunk_construction(
+water
+!3)e
+b^FP0>
+88Xr
+Jz*T
+159
+(>d
+ocean(

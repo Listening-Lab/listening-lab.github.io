@@ -1,0 +1,58 @@
+[
+  {
+    "filename": "site-a-valley-floor.wav",
+    "lat": -41.2946,
+    "lon": 174.7396,
+    "recordedAt": "2026-09-19T10:46:59.419Z",
+    "durationSeconds": 11
+  },
+  {
+    "filename": "site-b-upper-track.wav",
+    "lat": -41.2903,
+    "lon": 174.7381,
+    "recordedAt": "2026-09-19T07:46:59.419Z",
+    "durationSeconds": 5
+  },
+  {
+    "filename": "site-c-dam-lookout.wav",
+    "lat": -41.2968,
+    "lon": 174.7422,
+    "recordedAt": "2026-09-18T10:46:59.419Z",
+    "durationSeconds": 7
+  },
+  {
+    "filename": "site-d-ridge-north.wav",
+    "lat": -41.2887,
+    "lon": 174.7449,
+    "recordedAt": "2026-09-18T06:46:59.419Z",
+    "durationSeconds": 11
+  },
+  {
+    "filename": "site-e-forest-edge.wav",
+    "lat": -41.2932,
+    "lon": 174.7357,
+    "recordedAt": "2026-09-17T10:46:59.419Z",
+    "durationSeconds": 6
+  },
+  {
+    "filename": "site-f-wetland.wav",
+    "lat": -41.2981,
+    "lon": 174.7389,
+    "recordedAt": "2026-09-17T08:46:59.419Z",
+    "durationSeconds": 6
+  },
+  {
+    "filename": "site-g-summit.wav",
+    "lat": -41.2874,
+    "lon": 174.7405,
+    "recordedAt": "2026-09-16T09:46:59.419Z",
+    "durationSeconds": 9
+  },
+  {
+    "filename": "site-h-southern-fence.wav",
+    "lat": -41.3002,
+    "lon": 174.7371,
+    "recordedAt": "2026-09-16T04:46:59.419Z",
+    "durationSeconds": 11
+  }
+]
