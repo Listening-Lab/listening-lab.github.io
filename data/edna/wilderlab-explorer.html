@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wilderlab NZ — eDNA Explorer</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root{
+    --paper:#EEF0E6; --paper-2:#E3E6D8; --ink:#1F2E28;
+    --teal:#2B6F77; --moss:#5C7A4E; --grey:#8B8A7D; --rust:#B5651D; --gold:#C79A4A;
+    --line:#C7CABA;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.5;}
+  h1,h2{font-family:"Fraunces",serif;font-weight:600;margin:0;}
+  .mono{font-family:"IBM Plex Mono",monospace;}
+
+  header{padding:28px 32px 20px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;}
+  header h1{font-size:28px;letter-spacing:-0.01em;}
+  header p{margin:6px 0 0;color:var(--grey);max-width:46ch;}
+  .stats{display:flex;gap:24px;}
+  .stat{text-align:right;}
+  .stat .n{font-family:"IBM Plex Mono",monospace;font-size:22px;color:var(--teal);display:block;}
+  .stat .l{font-size:11px;color:var(--grey);}
+
+  .loader{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
+  .drop{background:var(--paper);padding:18px 24px;cursor:pointer;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;}
+  .drop.ready{background:#DDE6D5;}
+  .drop input{display:none;}
+  .drop .name{font-family:"IBM Plex Mono",monospace;font-size:13px;}
+  .drop .hint{color:var(--grey);font-size:13px;}
+  .bar{height:3px;background:var(--line);position:relative;overflow:hidden;}
+  .bar i{position:absolute;left:0;top:0;bottom:0;width:0%;background:var(--teal);transition:width .15s;}
+
+  main{padding:24px 32px 60px;display:grid;grid-template-columns:1.55fr 1fr;gap:24px;max-width:1500px;margin:0 auto;}
+  section{min-width:0;}
+  .panel{border:1px solid var(--line);background:var(--paper-2);padding:16px;margin-bottom:20px;}
+  .panel h2{font-size:14px;margin-bottom:12px;}
+  .panel h2 .sub{color:var(--grey);font-weight:400;font-size:12px;}
+  .full{grid-column:1 / -1;}
+
+  .modes{display:flex;gap:0;margin-bottom:10px;border:1px solid var(--line);width:fit-content;}
+  .modes button{
+    background:var(--paper);border:0;border-right:1px solid var(--line);
+    padding:7px 14px;font-size:13px;color:var(--grey);cursor:pointer;
+    font-family:inherit;
+  }
+  .modes button:last-child{border-right:0;}
+  .modes button.on{background:var(--teal);color:#fff;}
+  .modes button:focus-visible{outline:2px solid var(--rust);outline-offset:-2px;}
+
+  #map{height:540px;width:100%;border:1px solid var(--line);background:#DEE2D3;}
+  .legend{display:flex;gap:14px;margin-top:8px;font-size:12px;color:var(--grey);
+    align-items:center;flex-wrap:wrap;}
+  .legend .sw{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px;}
+  .legend .ramp{width:120px;height:10px;display:inline-block;vertical-align:middle;border:1px solid var(--line);}
+  .maphint{font-size:12px;color:var(--grey);margin:6px 0 0;}
+
+  input[type=search]{width:100%;padding:8px 10px;border:1px solid var(--line);background:var(--paper);
+    font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink);}
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px;}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);}
+  th{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--grey);font-weight:500;cursor:pointer;}
+  th:hover{color:var(--teal);}
+  td.num,th.num{text-align:right;font-family:"IBM Plex Mono",monospace;}
+  tr:hover td{background:var(--paper);}
+  a.taxlink{color:var(--teal);text-decoration:none;border-bottom:1px dotted var(--teal);}
+  .group-tag{font-size:11px;color:var(--moss);font-family:"IBM Plex Mono",monospace;}
+
+  footer{padding:20px 32px 40px;color:var(--grey);font-size:12px;max-width:74ch;}
+  footer p{margin:4px 0;}
+  canvas{max-width:100%;}
+
+  @media (max-width:900px){ main{grid-template-columns:1fr;} }
+  @media (prefers-reduced-motion:reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Wilderlab NZ — eDNA Explorer</h1>
+    <p>Reads your local records.csv and samples.csv directly in the browser. Nothing is uploaded.</p>
+  </div>
+  <div class="stats">
+    <div class="stat"><span class="n mono" id="statSamples">—</span><span class="l">samples</span></div>
+    <div class="stat"><span class="n mono" id="statRecords">—</span><span class="l">records</span></div>
+    <div class="stat"><span class="n mono" id="statTaxa">—</span><span class="l">taxa</span></div>
+  </div>
+</header>
+
+<p id="autoNote" class="mono" style="padding:8px 32px 0;color:var(--grey);font-size:12px;display:none;"></p>
+<div class="loader">
+  <label class="drop" id="dropSamples">
+    <span class="name" id="nameSamples">samples.csv — click to choose, or auto-loads over http(s)</span>
+    <span class="hint">metadata, location, TICI</span>
+    <input type="file" id="fileSamples" accept=".csv">
+  </label>
+  <label class="drop" id="dropRecords">
+    <span class="name" id="nameRecords">records.csv — click to choose, or auto-loads over http(s)</span>
+    <span class="hint">taxon detections, one row per hit</span>
+    <input type="file" id="fileRecords" accept=".csv">
+  </label>
+</div>
+<div class="bar"><i id="progressBar"></i></div>
+
+<main>
+  <section>
+    <div class="panel">
+      <div class="modes" role="group" aria-label="Map view">
+        <button id="mSites" class="on">Sample sites</button>
+        <button id="mRich">Taxon richness</button>
+        <button id="mTici">Ecological health</button>
+      </div>
+      <h2 id="mapTitle">Sample sites <span class="sub">every public sample, coloured by TICI</span></h2>
+      <div id="map"></div>
+      <div class="legend" id="mapLegend"></div>
+      <p class="maphint" id="mapHint"></p>
+    </div>
+  </section>
+
+  <section>
+    <div class="panel">
+      <h2>Taxa by rank <span class="sub">how far down the tree assignments reach</span></h2>
+      <canvas id="rankChart" height="200"></canvas>
+    </div>
+    <div class="panel">
+      <h2>Distinct taxa by group</h2>
+      <canvas id="groupChart" height="240"></canvas>
+    </div>
+    <div class="panel">
+      <h2>TICI distribution <span class="sub">across scored samples</span></h2>
+      <canvas id="ticiChart" height="170"></canvas>
+    </div>
+  </section>
+
+  <section class="full panel">
+    <h2>Rank resolution within each group <span class="sub">some groups resolve to species, others stall at family or above</span></h2>
+    <canvas id="groupRankChart" height="150"></canvas>
+  </section>
+
+  <section class="full panel">
+    <h2>Sampling through time <span class="sub">samples per month by collection date</span></h2>
+    <canvas id="timeChart" height="120"></canvas>
+  </section>
+
+  <section class="full panel">
+    <h2>Taxa <span class="sub" id="taxaCount"></span></h2>
+    <input type="search" id="taxonSearch" placeholder="Filter by name or common name…">
+    <table>
+      <thead>
+        <tr>
+          <th data-k="name">Name</th>
+          <th data-k="commonName">Common name</th>
+          <th data-k="group">Group</th>
+          <th data-k="rank">Rank</th>
+          <th class="num" data-k="totalCount">Reads</th>
+          <th class="num" data-k="sampleCount">Sites</th>
+          <th>NCBI TaxID</th>
+        </tr>
+      </thead>
+      <tbody id="taxonBody"></tbody>
+    </table>
+  </section>
+</main>
+
+<footer>
+  <p>TaxID is the NCBI Taxonomy identifier. Richness counts distinct assigned taxa, not species — a genus and its species are counted separately, so <i>Gobiomorphus</i> and <i>Gobiomorphus cotidianus</i> both contribute.</p>
+  <p>Interpolated surfaces use inverse-distance weighting from binned sample means, and fade out beyond 0.45° from any sample, so coverage follows where people have actually sampled. They are a reading aid, not a modelled prediction.</p>
+  <p>All parsing happens locally with PapaParse streaming; nothing leaves the machine.</p>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+// ---------------- state ----------------
+const samplesById   = new Map();  // UID -> {lat,lon,date,region,district,env,tici}
+const taxonAgg      = new Map();  // TaxID -> {name,commonName,rank,group,totalCount,sampleSet}
+const groupTaxa     = new Map();  // group -> Set(TaxID)
+const regionCounts  = new Map();
+const monthCounts   = new Map();  // 'YYYY-MM' -> n samples
+const richnessByUID = new Map();  // UID -> n rows (= distinct taxa in that sample)
+let samplesReady = false, recordsReady = false, recordRowCount = 0;
+
+const progressBar = document.getElementById('progressBar');
+const bump = p => progressBar.style.width = p + '%';
+
+// ---------------- map ----------------
+const map = L.map('map', { preferCanvas:true }).setView([-41.2, 173.2], 5);
+
+const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution:'&copy; OpenStreetMap contributors', subdomains:['a','b','c'], maxZoom:19
+}).addTo(map);
+
+// OSM refuses referer-less requests (i.e. pages opened via file://).
+// Fall back to Esri's keyless grey canvas after a few tile failures.
+let tileErrors = 0, swapped = false;
+osm.on('tileerror', () => {
+  if (swapped || ++tileErrors < 4) return;
+  swapped = true;
+  map.removeLayer(osm);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+    attribution:'Tiles &copy; Esri', maxZoom:16
+  }).addTo(map);
+});
+
+let siteLayer = L.layerGroup();
+let surfaceOverlay = null;
+let mapMode = 'sites';
+
+function ticiColor(v){
+  if (v === null || v === undefined || isNaN(v)) return '#8B8A7D';
+  if (v < 60)  return '#B5651D';
+  if (v < 90)  return '#C79A4A';
+  if (v < 110) return '#5C7A4E';
+  return '#2B6F77';
+}
+
+// --- colour ramps, returning [r,g,b] ---
+function lerp(a,b,t){ return a + (b-a)*t; }
+function ramp(stops, t){
+  t = Math.max(0, Math.min(1, t));
+  const seg = t * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(seg));
+  const f = seg - i, A = stops[i], B = stops[i+1];
+  return [lerp(A[0],B[0],f), lerp(A[1],B[1],f), lerp(A[2],B[2],f)];
+}
+const RICH_STOPS = [[238,240,230],[150,186,168],[43,111,119],[24,48,62]];
+const TICI_STOPS = [[181,101,29],[199,154,74],[92,122,78],[43,111,119]];
+const richRGB = t => ramp(RICH_STOPS, t);
+const ticiRGB = t => ramp(TICI_STOPS, t);
+
+function cssRamp(stops){
+  return 'linear-gradient(to right,' +
+    stops.map(s => `rgb(${s[0]|0},${s[1]|0},${s[2]|0})`).join(',') + ')';
+}
+
+// ---------------- interpolated surface ----------------
+// Mainland NZ window; markers still show everything, the surface covers this box.
+const NZ = { latMin:-47.4, latMax:-34.2, lonMin:166.2, lonMax:179.2 };
+const CELL = 0.05;      // aggregation bin, degrees
+const RADIUS = 0.45;    // IDW cutoff, degrees
+const CW = 300, CH = 340;
+
+function mercY(lat){ const r = lat*Math.PI/180; return Math.log(Math.tan(Math.PI/4 + r/2)); }
+function invMercY(y){ return (2*Math.atan(Math.exp(y)) - Math.PI/2) * 180/Math.PI; }
+
+function buildSurface(valueFn, rgbFn){
+  // 1. bin samples
+  const bins = new Map();
+  samplesById.forEach(s => {
+    const v = valueFn(s);
+    if (v === null || v === undefined || isNaN(v)) return;
+    if (isNaN(s.lat) || isNaN(s.lon)) return;
+    if (s.lat < NZ.latMin || s.lat > NZ.latMax || s.lon < NZ.lonMin || s.lon > NZ.lonMax) return;
+    const key = Math.round(s.lat/CELL) + '|' + Math.round(s.lon/CELL);
+    let b = bins.get(key);
+    if (!b){ b = {lat:0, lon:0, sum:0, n:0}; bins.set(key, b); }
+    b.lat += s.lat; b.lon += s.lon; b.sum += v; b.n++;
+  });
+  if (!bins.size) return null;
+
+  const pts = [];
+  bins.forEach(b => pts.push({ lat:b.lat/b.n, lon:b.lon/b.n, v:b.sum/b.n }));
+
+  // 2. bucket index at radius scale for fast neighbour lookup
+  const buckets = new Map();
+  pts.forEach(p => {
+    const k = Math.floor(p.lat/RADIUS) + '|' + Math.floor(p.lon/RADIUS);
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(p);
+  });
+
+  // 3. value range for colour scaling (2nd–98th percentile, resists outliers)
+  const vals = pts.map(p => p.v).sort((a,b) => a-b);
+  const vLo = vals[Math.floor(vals.length*0.02)];
+  const vHi = vals[Math.floor(vals.length*0.98)];
+  const span = (vHi - vLo) || 1;
+
+  // 4. rasterise in Mercator so the overlay lines up with Leaflet
+  const cv = document.createElement('canvas');
+  cv.width = CW; cv.height = CH;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(CW, CH);
+  const yTop = mercY(NZ.latMax), yBot = mercY(NZ.latMin);
+  const r2 = RADIUS * RADIUS;
+
+  for (let py = 0; py < CH; py++){
+    const lat = invMercY(yTop + (yBot - yTop) * (py + 0.5) / CH);
+    const bLat = Math.floor(lat/RADIUS);
+    for (let px = 0; px < CW; px++){
+      const lon = NZ.lonMin + (NZ.lonMax - NZ.lonMin) * (px + 0.5) / CW;
+      const bLon = Math.floor(lon/RADIUS);
+      let wsum = 0, vsum = 0, nearest = Infinity;
+      for (let dy = -1; dy <= 1; dy++){
+        for (let dx = -1; dx <= 1; dx++){
+          const arr = buckets.get((bLat+dy) + '|' + (bLon+dx));
+          if (!arr) continue;
+          for (let i = 0; i < arr.length; i++){
+            const p = arr[i];
+            const ddy = p.lat - lat, ddx = (p.lon - lon) * Math.cos(lat*Math.PI/180);
+            const d2 = ddy*ddy + ddx*ddx;
+            if (d2 > r2) continue;
+            if (d2 < nearest) nearest = d2;
+            const w = 1 / (d2 + 1e-6);
+            wsum += w; vsum += w * p.v;
+          }
+        }
+      }
+      const o = (py*CW + px) * 4;
+      if (wsum === 0){ img.data[o+3] = 0; continue; }
+      const t = (vsum/wsum - vLo) / span;
+      const c = rgbFn(t);
+      // fade out toward the edge of coverage
+      const edge = 1 - Math.sqrt(nearest)/RADIUS;
+      img.data[o]   = c[0]|0;
+      img.data[o+1] = c[1]|0;
+      img.data[o+2] = c[2]|0;
+      img.data[o+3] = Math.max(0, Math.min(1, edge*1.6)) * 200;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return { url: cv.toDataURL(), vLo, vHi };
+}
+
+function clearSurface(){
+  if (surfaceOverlay){ map.removeLayer(surfaceOverlay); surfaceOverlay = null; }
+}
+
+function showSites(){
+  clearSurface();
+  siteLayer.clearLayers();
+  samplesById.forEach(s => {
+    if (isNaN(s.lat) || isNaN(s.lon)) return;
+    L.circleMarker([s.lat, s.lon], {
+      radius:3.5, weight:0, fillOpacity:0.75, fillColor:ticiColor(s.tici)
+    }).bindPopup(
+      `<b>${s.region}${s.district ? ' — ' + s.district : ''}</b><br>` +
+      `${s.env || ''}<br>${s.date || ''}<br>` +
+      `TICI: ${s.tici !== null ? s.tici.toFixed(1) : '—'}<br>` +
+      `Taxa detected: ${(richnessByUID.get(s.uid) || 0).toLocaleString()}`
+    ).addTo(siteLayer);
+  });
+  siteLayer.addTo(map);
+  document.getElementById('mapTitle').innerHTML =
+    'Sample sites <span class="sub">every public sample, coloured by TICI</span>';
+  document.getElementById('mapLegend').innerHTML =
+    ['<span><span class="sw" style="background:#B5651D"></span>&lt; 60</span>',
+     '<span><span class="sw" style="background:#C79A4A"></span>60–90</span>',
+     '<span><span class="sw" style="background:#5C7A4E"></span>90–110</span>',
+     '<span><span class="sw" style="background:#2B6F77"></span>&gt; 110</span>',
+     '<span><span class="sw" style="background:#8B8A7D"></span>no score</span>'].join('');
+  document.getElementById('mapHint').textContent = 'Click any site for its region, date, TICI and taxon count.';
+}
+
+function showSurface(kind){
+  map.removeLayer(siteLayer);
+  clearSurface();
+  const isRich = kind === 'rich';
+  const valueFn = isRich
+    ? (s => richnessByUID.get(s.uid) || null)
+    : (s => s.tici);
+  const res = buildSurface(valueFn, isRich ? richRGB : ticiRGB);
+  if (!res){ document.getElementById('mapHint').textContent = 'Load both files to build this surface.'; return; }
+
+  surfaceOverlay = L.imageOverlay(res.url,
+    [[NZ.latMin, NZ.lonMin], [NZ.latMax, NZ.lonMax]], { opacity:0.85 }).addTo(map);
+
+  const stops = isRich ? RICH_STOPS : TICI_STOPS;
+  document.getElementById('mapTitle').innerHTML = isRich
+    ? 'Taxon richness <span class="sub">distinct taxa per sample, interpolated between sites</span>'
+    : 'Ecological health <span class="sub">TICI score, interpolated between sites</span>';
+  document.getElementById('mapLegend').innerHTML =
+    `<span>${Math.round(res.vLo)}</span>` +
+    `<span class="ramp" style="background:${cssRamp(stops)}"></span>` +
+    `<span>${Math.round(res.vHi)}</span>` +
+    `<span style="margin-left:8px">${isRich ? 'taxa per sample' : 'TICI score'}</span>`;
+  document.getElementById('mapHint').textContent = isRich
+    ? 'Higher values mean more distinct taxa recovered from a single sample. Sampling effort and assay panel both affect this, so read it as relative, not absolute.'
+    : 'TICI centres near 100. Lower scores indicate more impacted communities.';
+}
+
+function setMode(m){
+  mapMode = m;
+  document.getElementById('mSites').classList.toggle('on', m === 'sites');
+  document.getElementById('mRich').classList.toggle('on', m === 'rich');
+  document.getElementById('mTici').classList.toggle('on', m === 'tici');
+  if (!samplesReady) return;
+  if (m === 'sites') showSites(); else showSurface(m);
+}
+document.getElementById('mSites').onclick = () => setMode('sites');
+document.getElementById('mRich').onclick  = () => setMode('rich');
+document.getElementById('mTici').onclick  = () => setMode('tici');
+
+// ---------------- file loading ----------------
+function wireDrop(dropId, inputId, nameId, onFile){
+  const drop = document.getElementById(dropId), input = document.getElementById(inputId);
+  const nameEl = document.getElementById(nameId);
+  input.addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    nameEl.textContent = f.name + '  ·  ' + (f.size/1e6).toFixed(1) + ' MB';
+    drop.classList.add('ready');
+    onFile(f);
+  });
+}
+wireDrop('dropSamples','fileSamples','nameSamples', parseSamples);
+wireDrop('dropRecords','fileRecords','nameRecords', parseRecords);
+
+if (location.protocol !== 'file:'){
+  const note = document.getElementById('autoNote');
+  note.style.display = 'block';
+  note.textContent = 'Looking for samples.csv and records.csv next to this page…';
+  let found = 0;
+  const tryAuto = (url, nameId, dropId, onFile) => {
+    fetch(url).then(res => { if (!res.ok) throw 0; return res.blob(); }).then(blob => {
+      found++;
+      document.getElementById(nameId).textContent =
+        url + '  ·  ' + (blob.size/1e6).toFixed(1) + ' MB (auto-loaded)';
+      document.getElementById(dropId).classList.add('ready');
+      onFile(new File([blob], url));
+    }).catch(() => {
+      if (!found) note.textContent = 'No CSVs found next to this page — choose files below.';
+    });
+  };
+  tryAuto('samples.csv','nameSamples','dropSamples', parseSamples);
+  tryAuto('records.csv','nameRecords','dropRecords', parseRecords);
+}
+
+function parseSamples(file){
+  bump(5);
+  Papa.parse(file, {
+    header:true, skipEmptyLines:true, worker:true,
+    step: row => {
+      const r = row.data;
+      if (!r.UID) return;
+      const uid = String(r.UID).replace(/"/g,'').trim();
+      const tici = parseFloat(r.TICI);
+      samplesById.set(uid, {
+        uid,
+        lat:parseFloat(r.Latitude), lon:parseFloat(r.Longitude),
+        date:r.CollectionDate, env:r.EnvironmentType,
+        region:r.Region || 'Unknown', district:r.District || '',
+        tici: isNaN(tici) ? null : tici
+      });
+      regionCounts.set(r.Region || 'Unknown', (regionCounts.get(r.Region || 'Unknown')||0) + 1);
+      if (r.CollectionDate && r.CollectionDate.length >= 7){
+        const m = r.CollectionDate.slice(0,7);
+        monthCounts.set(m, (monthCounts.get(m)||0) + 1);
+      }
+    },
+    complete: () => {
+      samplesReady = true;
+      bump(recordsReady ? 100 : 30);
+      document.getElementById('statSamples').textContent = samplesById.size.toLocaleString();
+      map.invalidateSize();
+      setMode(mapMode);
+      renderTiciChart();
+      renderTimeChart();
+      if (recordsReady) finalize();
+    }
+  });
+}
+
+function parseRecords(file){
+  bump(5);
+  Papa.parse(file, {
+    header:true, skipEmptyLines:true, worker:true,
+    step: row => {
+      const r = row.data;
+      if (!r.TaxID) return;
+      recordRowCount++;
+      const id = r.TaxID;
+      let t = taxonAgg.get(id);
+      if (!t){
+        t = { taxID:id, name:r.Name, commonName:r.CommonName||'', rank:r.Rank||'unranked',
+              group:r.Group||'Unclassified', totalCount:0, sampleSet:new Set() };
+        taxonAgg.set(id, t);
+        if (!groupTaxa.has(t.group)) groupTaxa.set(t.group, new Set());
+        groupTaxa.get(t.group).add(id);
+      }
+      t.totalCount += (parseInt(r.Count,10) || 0);
+      t.sampleSet.add(r.UID);
+      const uid = String(r.UID).replace(/"/g,'').trim();
+      richnessByUID.set(uid, (richnessByUID.get(uid)||0) + 1);
+
+      if (recordRowCount % 25000 === 0){
+        document.getElementById('statRecords').textContent = recordRowCount.toLocaleString();
+        document.getElementById('statTaxa').textContent = taxonAgg.size.toLocaleString();
+      }
+    },
+    complete: () => {
+      recordsReady = true;
+      document.getElementById('statRecords').textContent = recordRowCount.toLocaleString();
+      document.getElementById('statTaxa').textContent = taxonAgg.size.toLocaleString();
+      bump(samplesReady ? 100 : 70);
+      renderRankChart();
+      renderGroupChart();
+      renderGroupRankChart();
+      renderTaxonTable();
+      if (samplesReady){ if (mapMode !== 'sites') setMode(mapMode); finalize(); }
+    }
+  });
+}
+function finalize(){ bump(100); setTimeout(()=>bump(0), 800); }
+
+// ---------------- charts ----------------
+const RANK_ORDER = ['species','genus','family','order','class','phylum','kingdom','domain','superkingdom','no rank','unranked'];
+const RANK_COLORS = {
+  species:'#2B6F77', genus:'#5C7A4E', family:'#C79A4A', order:'#B5651D',
+  class:'#8B8A7D', phylum:'#4A6670', kingdom:'#9AA88C', domain:'#6E6A5B'
+};
+const gridX = {x:{grid:{display:false}}, y:{grid:{color:'#C7CABA'}}};
+const gridY = {x:{grid:{color:'#C7CABA'}}, y:{grid:{display:false}}};
+let rankChart, groupChart, ticiChart, groupRankChart, timeChart;
+
+function rankSort(a,b){
+  const ia = RANK_ORDER.indexOf(a), ib = RANK_ORDER.indexOf(b);
+  return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+}
+
+function renderRankChart(){
+  const counts = new Map();
+  taxonAgg.forEach(t => counts.set(t.rank, (counts.get(t.rank)||0) + 1));
+  const labels = [...counts.keys()].sort(rankSort);
+  if (rankChart) rankChart.destroy();
+  rankChart = new Chart(document.getElementById('rankChart'), {
+    type:'bar',
+    data:{ labels, datasets:[{ data:labels.map(l=>counts.get(l)),
+      backgroundColor:labels.map(l=>RANK_COLORS[l] || '#8B8A7D') }]},
+    options:{ plugins:{legend:{display:false}}, scales:gridX }
+  });
+}
+
+function renderGroupChart(){
+  const e = [...groupTaxa.entries()].map(([g,s])=>[g,s.size]).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  if (groupChart) groupChart.destroy();
+  groupChart = new Chart(document.getElementById('groupChart'), {
+    type:'bar',
+    data:{ labels:e.map(x=>x[0]), datasets:[{ data:e.map(x=>x[1]), backgroundColor:'#2B6F77' }]},
+    options:{ indexAxis:'y', plugins:{legend:{display:false}}, scales:gridY }
+  });
+}
+
+function renderGroupRankChart(){
+  const topGroups = [...groupTaxa.entries()]
+    .map(([g,s])=>[g,s.size]).sort((a,b)=>b[1]-a[1]).slice(0,12).map(x=>x[0]);
+  const ranksSeen = new Set();
+  taxonAgg.forEach(t => { if (topGroups.includes(t.group)) ranksSeen.add(t.rank); });
+  const ranks = [...ranksSeen].sort(rankSort);
+
+  const matrix = new Map();  // group -> rank -> n
+  topGroups.forEach(g => matrix.set(g, new Map()));
+  taxonAgg.forEach(t => {
+    const m = matrix.get(t.group);
+    if (m) m.set(t.rank, (m.get(t.rank)||0) + 1);
+  });
+
+  if (groupRankChart) groupRankChart.destroy();
+  groupRankChart = new Chart(document.getElementById('groupRankChart'), {
+    type:'bar',
+    data:{
+      labels: topGroups,
+      datasets: ranks.map(r => ({
+        label: r,
+        data: topGroups.map(g => matrix.get(g).get(r) || 0),
+        backgroundColor: RANK_COLORS[r] || '#B0B3A4'
+      }))
+    },
+    options:{
+      plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:11} } } },
+      scales:{ x:{stacked:true, grid:{display:false}}, y:{stacked:true, grid:{color:'#C7CABA'}} }
+    }
+  });
+}
+
+function renderTiciChart(){
+  const vals = [...samplesById.values()].map(s=>s.tici).filter(v=>v!==null);
+  const bins = new Array(14).fill(0);
+  vals.forEach(v => bins[Math.min(13, Math.max(0, Math.floor(v/10)))]++);
+  if (ticiChart) ticiChart.destroy();
+  ticiChart = new Chart(document.getElementById('ticiChart'), {
+    type:'bar',
+    data:{ labels:bins.map((_,i)=>`${i*10}`), datasets:[{ data:bins,
+      backgroundColor:bins.map((_,i)=>ticiColor(i*10+5)) }]},
+    options:{ plugins:{legend:{display:false}}, scales:gridX }
+  });
+}
+
+function renderTimeChart(){
+  const months = [...monthCounts.keys()].sort();
+  if (!months.length) return;
+  // fill gaps so the axis is continuous
+  const out = [], labels = [];
+  let [y,m] = months[0].split('-').map(Number);
+  const [ey,em] = months[months.length-1].split('-').map(Number);
+  while (y < ey || (y === ey && m <= em)){
+    const k = `${y}-${String(m).padStart(2,'0')}`;
+    labels.push(k); out.push(monthCounts.get(k) || 0);
+    m++; if (m > 12){ m = 1; y++; }
+  }
+  if (timeChart) timeChart.destroy();
+  timeChart = new Chart(document.getElementById('timeChart'), {
+    type:'line',
+    data:{ labels, datasets:[{ data:out, borderColor:'#2B6F77', backgroundColor:'rgba(43,111,119,.15)',
+      fill:true, pointRadius:0, borderWidth:1.5, tension:0.25 }]},
+    options:{ plugins:{legend:{display:false}},
+      scales:{ x:{grid:{display:false}, ticks:{maxTicksLimit:14}}, y:{grid:{color:'#C7CABA'}} } }
+  });
+}
+
+// ---------------- taxon table ----------------
+let sortKey = 'totalCount', sortDir = -1, filterText = '';
+function renderTaxonTable(){
+  const rows = [...taxonAgg.values()]
+    .filter(t => !filterText || t.name.toLowerCase().includes(filterText)
+                             || (t.commonName||'').toLowerCase().includes(filterText))
+    .sort((a,b) => {
+      let av = a[sortKey], bv = b[sortKey];
+      if (sortKey === 'sampleCount'){ av = a.sampleSet.size; bv = b.sampleSet.size; }
+      if (typeof av === 'string') return sortDir * av.localeCompare(bv);
+      return sortDir * (av - bv);
+    }).slice(0, 400);
+  document.getElementById('taxaCount').textContent =
+    `— showing ${rows.length.toLocaleString()} of ${taxonAgg.size.toLocaleString()}`;
+  document.getElementById('taxonBody').innerHTML = rows.map(t => `
+    <tr>
+      <td><i>${t.name}</i></td><td>${t.commonName||''}</td>
+      <td class="group-tag">${t.group}</td><td>${t.rank}</td>
+      <td class="num">${t.totalCount.toLocaleString()}</td>
+      <td class="num">${t.sampleSet.size.toLocaleString()}</td>
+      <td><a class="taxlink" target="_blank" rel="noopener"
+        href="https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?id=${t.taxID}">${t.taxID}</a></td>
+    </tr>`).join('');
+}
+document.getElementById('taxonSearch').addEventListener('input', e => {
+  filterText = e.target.value.toLowerCase();
+  if (recordsReady) renderTaxonTable();
+});
+document.querySelectorAll('th[data-k]').forEach(th => {
+  th.addEventListener('click', () => {
+    const k = th.dataset.k;
+    sortDir = (sortKey === k) ? -sortDir : -1;
+    sortKey = k;
+    if (recordsReady) renderTaxonTable();
+  });
+});
+</script>
+</body>
+</html>

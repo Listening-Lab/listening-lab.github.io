@@ -2,31 +2,32 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import AudioUploadModal from './AudioUploadModal'
+import { ClassificationResult } from '@/lib/perchClient'
 
 // ─── config ──────────────────────────────────────────────────────────────────
 
 // Map (left panel) points
-const MAP_POINT_SIZE_MIN      = 0.55  // minimum base size per point
-const MAP_POINT_SIZE_RANGE    = 0.65  // random size added on top of min (so max = min + range)
-const MAP_POINT_SELECTED_SCALE = 0.3  // size multiplier applied to all points when a region is selected
+const MAP_POINT_SIZE_MIN       = 0.55  // minimum base size per point
+const MAP_POINT_SIZE_RANGE     = 0.65  // random size added on top of min
+const MAP_POINT_SELECTED_SCALE = 0.3   // size multiplier applied when a region is selected
 
 // UMAP (right panel) points
-const UMAP_POINT_HOVER_SCALE    = 2.0  // size multiplier when a point is hovered
-const UMAP_RAYCASTER_THRESHOLD  = 0.5  // world-unit hit radius for point picking
-const UMAP_CAM_Z                = 6.16 // initial camera distance from origin
-const UMAP_CAM_MIN_DIST         = 3    // minimum orbit zoom distance
-const UMAP_CAM_MAX_DIST         = 30   // maximum orbit zoom distance
-const UMAP_AUTO_ROTATE_SPEED    = 0.05  // auto-rotation speed (degrees/frame scaled by Three.js)
+const UMAP_POINT_HOVER_SCALE   = 2.0   // size multiplier when a point is hovered
+const UMAP_RAYCASTER_THRESHOLD = 0.5   // world-unit hit radius for point picking
+const UMAP_CAM_Z               = 6.16  // initial camera distance from origin
+const UMAP_CAM_MIN_DIST        = 3     // minimum orbit zoom distance
+const UMAP_CAM_MAX_DIST        = 30    // maximum orbit zoom distance
+const UMAP_AUTO_ROTATE_SPEED   = 0.05  // auto-rotation speed
 
-// UMAP ambient drift — must stay in sync between UMAP_VERT shader and the JS
-// raycasting drift-correction in animateRight (search "replicate UMAP_VERT drift")
+// UMAP ambient drift
 const DRIFT_PHASE_X  = 1.73;  const DRIFT_PHASE_Y  = 0.91;  const DRIFT_PHASE_Z  = 1.37
 const DRIFT_AMP_XY   = 0.09;  const DRIFT_AMP_Z    = 0.07
 const DRIFT_FREQ_X   = 0.32;  const DRIFT_FREQ_Y   = 0.27;  const DRIFT_FREQ_Z   = 0.38
 
-// Audio fade  (AUDIO_FADE_STEPS × AUDIO_FADE_INTERVAL_MS = total fade duration in ms)
-const AUDIO_FADE_STEPS       = 80   // number of volume steps in a fade
-const AUDIO_FADE_INTERVAL_MS = 50   // ms between each step  → 20 × 50 ms = 1 s
+// Audio fade
+const AUDIO_FADE_STEPS       = 80
+const AUDIO_FADE_INTERVAL_MS = 50
 
 // ─── coordinate system ───────────────────────────────────────────────────────
 const MID_LON = 172.5, MID_LAT = -41.2, DEG_SCALE = 4 / 13
@@ -46,7 +47,7 @@ function pip(px: number, py: number, ring: [number, number][]): boolean {
 }
 
 // ─── types ───────────────────────────────────────────────────────────────────
-interface Recording {
+export interface Recording {
   idx: number; id: number
   genus: string; species: string; englishName: string
   lat: number; lon: number
@@ -56,17 +57,41 @@ interface Recording {
   file: string
 }
 
-interface NZRegion {
+export interface NZRegion {
   id: string; name: string; color: string
   worldPolygons: [number, number][][][]
   bbox: { minX: number; maxX: number; minY: number; maxY: number }
 }
 
-interface AppData {
+export interface AppData {
   regions: NZRegion[]
   recordings: Recording[]
   speciesColors: string[]
   speciesKeys: string[]
+  referenceCentroids?: Map<string, [number, number, number]>
+  uxMid?: number
+  uyMid?: number
+  uzMid?: number
+}
+
+export interface SpeciesDetails {
+  commonName: string
+  scientificName: string
+  description: string
+  extract: string
+  photoUrl: string
+  photoAttribution: string
+  conservationStatus: string
+  rank: string
+  order: string
+  family: string
+  genus: string
+  class?: string
+  observationsCount: string
+  wikiUrl: string
+  inatUrl: string
+  ottUrl?: string
+  audioUrl: string
 }
 
 // ─── palettes ────────────────────────────────────────────────────────────────
@@ -101,8 +126,6 @@ async function loadData(): Promise<AppData> {
   const geoJSON = await geoResp.json()
   const csvText = await csvResp.text()
 
-  // regions
-  // Wrap longitudes west of -170° (Chatham Islands cross the antimeridian)
   const wrapLon = (lon: number) => lon < -170 ? lon + 360 : lon
 
   const regions: NZRegion[] = geoJSON.features.map((f: any, i: number) => {
@@ -120,7 +143,6 @@ async function loadData(): Promise<AppData> {
     return { id: f.properties.id, name: f.properties.name, color: REGION_COLORS[i % REGION_COLORS.length], worldPolygons, bbox: { minX, maxX, minY, maxY } }
   })
 
-  // recordings
   const lines = csvText.trim().split('\n').slice(1)
   const recs: Recording[] = []
   for (const line of lines) {
@@ -131,7 +153,6 @@ async function loadData(): Promise<AppData> {
       recs.push({ idx: recs.length, id: parseInt(p[0]), genus: p[1], species: p[2], englishName: p[3], lat, lon, regionIdx: -1, umapX, umapY, umapZ, speciesIdx: 0, file: p[12] })
   }
 
-  // assign region via pip
   const rings: { ri: number; ring: [number, number][] }[] = []
   regions.forEach((reg, ri) => reg.worldPolygons.forEach(poly => rings.push({ ri, ring: poly[0] })))
   recs.forEach(rec => {
@@ -139,7 +160,6 @@ async function loadData(): Promise<AppData> {
     for (const { ri, ring } of rings) if (pip(wx, wy, ring)) { rec.regionIdx = ri; break }
   })
 
-  // centre UMAP coords around origin
   let uxMin = Infinity, uxMax = -Infinity, uyMin = Infinity, uyMax = -Infinity, uzMin = Infinity, uzMax = -Infinity
   recs.forEach(r => {
     if (r.umapX < uxMin) uxMin = r.umapX; if (r.umapX > uxMax) uxMax = r.umapX
@@ -149,17 +169,28 @@ async function loadData(): Promise<AppData> {
   const uxMid = (uxMin + uxMax) / 2, uyMid = (uyMin + uyMax) / 2, uzMid = (uzMin + uzMax) / 2
   recs.forEach(r => { r.umapX -= uxMid; r.umapY -= uyMid; r.umapZ -= uzMid })
 
-  // species index + colors
   const speciesKeys = Array.from(new Set(recs.map(r => `${r.genus}_${r.species}`)))
   const nSp = speciesKeys.length
   recs.forEach(rec => { rec.speciesIdx = speciesKeys.indexOf(`${rec.genus}_${rec.species}`) })
 
-  // species colors — HSL wheel
   const speciesColors = speciesKeys.map((_, i) =>
     '#' + new THREE.Color().setHSL(i / nSp, 0.75, 0.65).getHexString()
   )
 
-  return { regions, recordings: recs, speciesColors, speciesKeys }
+  const referenceCentroids = new Map<string, [number, number, number]>()
+  const speciesCounts = new Map<string, number>()
+  recs.forEach(r => {
+    const k = `${r.genus.toLowerCase()}_${r.species.toLowerCase()}`
+    const existing = referenceCentroids.get(k) || [0, 0, 0]
+    referenceCentroids.set(k, [existing[0] + r.umapX, existing[1] + r.umapY, existing[2] + r.umapZ])
+    speciesCounts.set(k, (speciesCounts.get(k) || 0) + 1)
+  })
+  referenceCentroids.forEach((coords, k) => {
+    const count = speciesCounts.get(k) || 1
+    referenceCentroids.set(k, [coords[0] / count, coords[1] / count, coords[2] / count])
+  })
+
+  return { regions, recordings: recs, speciesColors, speciesKeys, referenceCentroids, uxMid, uyMid, uzMid }
 }
 
 // ─── shared shaders ──────────────────────────────────────────────────────────
@@ -172,8 +203,8 @@ const VERT = /* glsl */`
   varying float vAlpha;
   uniform float uTime;
   uniform float uPixelRatio;
-  uniform float uSelectedRegion; // -1 = none
-  uniform float uUseSpecies;     // 0 = region color, 1 = species color for selected
+  uniform float uSelectedRegion;
+  uniform float uUseSpecies;
   void main() {
     bool noSel   = uSelectedRegion < -0.5;
     bool isSel   = abs(aRegionIdx - uSelectedRegion) < 0.5;
@@ -201,7 +232,6 @@ const FRAG = /* glsl */`
   }
 `
 
-// UMAP panel vertex shader — same colouring logic + 3-D ambient drift
 const UMAP_VERT = /* glsl */`
   attribute float aRegionIdx;
   attribute vec3  aRegionColor;
@@ -224,7 +254,6 @@ const UMAP_VERT = /* glsl */`
     if (noSel || unassigned) vAlpha = 0.85;
     else vAlpha = isSel ? 1.0 : 0.25;
 
-    // Ambient drift — each point gets a unique phase from its rest position
     float phase = position.x * ${DRIFT_PHASE_X} + position.y * ${DRIFT_PHASE_Y} + position.z * ${DRIFT_PHASE_Z};
     vec3 pos = position;
     pos.x += ${DRIFT_AMP_XY} * sin(uTime * ${DRIFT_FREQ_X} + phase);
@@ -242,9 +271,6 @@ const UMAP_VERT = /* glsl */`
   }
 `
 
-// Ripple — full-quad SDF shader; soft ring avoids hard geometric edges,
-// additive blending means overlapping ripples add brightness rather than
-// compounding opacity (the source of the aliasing seam).
 const RIPPLE_VERT = /* glsl */`
   varying vec2 vUv;
   void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
@@ -252,13 +278,13 @@ const RIPPLE_VERT = /* glsl */`
 const RIPPLE_FRAG = /* glsl */`
   varying vec2 vUv;
   uniform vec3  uColor;
-  uniform float uAge;   // 0 → 1 over the ripple lifetime
+  uniform float uAge;
   void main() {
-    float d         = length(vUv - 0.5) * 2.0;   // 0 = centre, 1 = quad edge
-    float radius    = 0.08 + uAge * 0.82;          // ring expands outward
-    float thickness = mix(0.18, 0.04, uAge);       // thins as it grows
+    float d         = length(vUv - 0.5) * 2.0;
+    float radius    = 0.08 + uAge * 0.82;
+    float thickness = mix(0.18, 0.04, uAge);
     float ring      = max(0.0, 1.0 - abs(d - radius) / thickness);
-    ring            = ring * ring;                  // smooth falloff
+    ring            = ring * ring;
     gl_FragColor    = vec4(uColor, ring * (1.0 - uAge) * 0.65);
   }
 `
@@ -271,6 +297,7 @@ function initThree(
   cb: {
     onHoverRegion: (name: string | null) => void
     onHoverPoint: (rec: Recording | null) => void
+    onSelectPoint: (rec: Recording | null, pos?: { x: number; y: number } | null) => void
     onSelectRegion: (idx: number) => void
     getSelected: () => number
     getMuted: () => boolean
@@ -282,7 +309,6 @@ function initThree(
   const n = recordings.length
   const PR = Math.min(devicePixelRatio, 2)
 
-  // ── build colour arrays ──────────────────────────────────────────────────
   const regionColArr = new Float32Array(n * 3)
   const speciesColArr = new Float32Array(n * 3)
   const regionIdxAttr = new Float32Array(n)
@@ -328,10 +354,7 @@ function initThree(
     return g
   }
 
-  // ╔══════════════════════════════════════════════════════════════════════╗
-  // ║  LEFT PANEL — NZ MAP                                                ║
-  // ╚══════════════════════════════════════════════════════════════════════╝
-
+  // ── LEFT PANEL ──────────────────────────────────────────────────────────
   const leftRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
   leftRenderer.setPixelRatio(PR)
   leftRenderer.setSize(leftEl.clientWidth, leftEl.clientHeight)
@@ -342,11 +365,9 @@ function initThree(
   const leftCam = new THREE.PerspectiveCamera(52, leftEl.clientWidth / leftEl.clientHeight, 0.01, 50)
   leftCam.position.set(0, 0, 4.5)
 
-  // Camera state
   const cam = { baseX: 0, baseY: 0, baseZ: 4.5, curX: 0, curY: 0, curZ: 4.5, lookX: 0, lookY: 0 }
   const leftMouse = { nx: 0, ny: 0 }
 
-  // ── GeoJSON region fills + outlines ──────────────────────────────────
   type RegionGroup = { fillMats: THREE.MeshBasicMaterial[]; outlineMats: THREE.LineBasicMaterial[] }
   const regionGroups = new Map<number, RegionGroup>()
 
@@ -355,7 +376,6 @@ function initThree(
     const group: RegionGroup = { fillMats: [], outlineMats: [] }
 
     reg.worldPolygons.forEach(worldPoly => {
-      // fill
       const shape = new THREE.Shape()
       const outer = worldPoly[0]
       shape.moveTo(outer[0][0], outer[0][1])
@@ -374,9 +394,8 @@ function initThree(
         const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), fillMat)
         mesh.position.z = -0.15
         leftScene.add(mesh)
-      } catch { /* skip bad geometry */ }
+      } catch { /* skip */ }
 
-      // outline
       const verts: number[] = []
       outer.forEach(([x, y]) => verts.push(x, y, 0))
       verts.push(outer[0][0], outer[0][1], 0)
@@ -390,7 +409,6 @@ function initThree(
     regionGroups.set(ri, group)
   })
 
-  // ── Map points ───────────────────────────────────────────────────────
   const mapXs = new Float32Array(n), mapYs = new Float32Array(n)
   recordings.forEach((rec, i) => { const [x, y] = ll2w(rec.lon, rec.lat); mapXs[i]=x; mapYs[i]=y })
   const leftGeo = makePointsGeom(mapXs, mapYs)
@@ -402,7 +420,6 @@ function initThree(
   const leftPoints = new THREE.Points(leftGeo, leftMat)
   leftScene.add(leftPoints)
 
-  // ── Region hover detection via fill meshes ────────────────────────────
   const regionHitMeshes: { mesh: THREE.Mesh; ri: number }[] = []
   regions.forEach((reg, ri) => {
     reg.worldPolygons.forEach(worldPoly => {
@@ -423,12 +440,11 @@ function initThree(
     })
   })
 
-  // ── Ripple pool (for right-panel hover pulse) ─────────────────────────
   const ripples: { mesh: THREE.Mesh; mat: THREE.ShaderMaterial; born: number; life: number }[] = []
   let lastRippleTime = -99
   let lastRippleIdx = -1
-  const RIPPLE_SIZE = 0.7   // world-unit quad side — sets max ripple radius
-  const RIPPLE_LIFE = 1.0   // seconds
+  const RIPPLE_SIZE = 0.7
+  const RIPPLE_LIFE = 1.0
 
   function spawnRipple(wx: number, wy: number, color: string, pointIdx: number) {
     const now = leftClock.getElapsedTime()
@@ -449,18 +465,16 @@ function initThree(
     ripples.push({ mesh, mat, born: now, life: RIPPLE_LIFE })
   }
 
-  // ── Left raycaster ────────────────────────────────────────────────────
   const leftRaycaster = new THREE.Raycaster()
   const leftMouse2D = new THREE.Vector2()
   let leftHoveredRi = -1
 
-  // ── Pan state ─────────────────────────────────────────────────────────
   let panX = 0, panY = 0
-  const PAN_LIMIT_X = 3.5   // world units (enough to reach Chatham Islands)
-  const PAN_LIMIT_Y = 2.0   // world units (enough to reach subantarctic islands)
+  const PAN_LIMIT_X = 3.5
+  const PAN_LIMIT_Y = 2.0
   let isDragging = false
   let dragLast = { x: 0, y: 0 }
-  let dragDist = 0           // total drag distance in px — suppresses click if > 4
+  let dragDist = 0
 
   const onLeftMouseDown = (e: MouseEvent) => {
     isDragging = true; dragDist = 0
@@ -487,7 +501,7 @@ function initThree(
   }
 
   const onLeftClick = () => {
-    if (dragDist > 4) return   // suppress click after a drag
+    if (dragDist > 4) return
     if (leftHoveredRi >= 0) {
       const cur = cb.getSelected()
       const next = leftHoveredRi === cur ? -1 : leftHoveredRi
@@ -501,13 +515,10 @@ function initThree(
   leftEl.addEventListener('click', onLeftClick)
   window.addEventListener('mouseup', onLeftMouseUp)
 
-  // ── Left panel touch support ──────────────────────────────────────────
   const onLeftTouchStart = (e: TouchEvent) => {
     if (e.touches.length !== 1) return
     isDragging = true; dragDist = 0
     dragLast = { x: e.touches[0].clientX, y: e.touches[0].clientY }
-    // Update mouse position immediately so animateLeft's hover detection can
-    // run at least one frame before touchend fires, setting leftHoveredRi.
     const touch = e.touches[0]
     const rect = leftEl.getBoundingClientRect()
     leftMouse.nx = (touch.clientX - rect.left) / rect.width - 0.5
@@ -537,9 +548,6 @@ function initThree(
   const onLeftTouchEnd = (e: TouchEvent) => {
     isDragging = false
     if (dragDist > 8 || e.changedTouches.length !== 1) return
-    // Mirror the desktop click handler: use the hovered region that animateLeft
-    // has already computed from the touchstart position. Fall back to a direct
-    // raycast for very fast taps where no animation frame has run yet.
     let targetRi = leftHoveredRi
     if (targetRi < 0) {
       const touch = e.changedTouches[0]
@@ -563,14 +571,13 @@ function initThree(
   leftEl.addEventListener('touchend',   onLeftTouchEnd,   { passive: true })
 
   function updateSelection(ri: number) {
-    panX = 0; panY = 0   // reset pan on any selection change
+    panX = 0; panY = 0
     const sel = ri >= 0 ? ri : -1
     leftMat.uniforms.uSelectedRegion.value = sel
     leftMat.uniforms.uUseSpecies.value = sel >= 0 ? 1 : 0
     rightMat.uniforms.uSelectedRegion.value = sel
     rightMat.uniforms.uUseSpecies.value = sel >= 0 ? 1 : 0
 
-    // region fill opacity
     regionGroups.forEach((group, groupRi) => {
       const isSelected = groupRi === sel
       const showAll = sel < 0
@@ -578,7 +585,6 @@ function initThree(
       group.outlineMats.forEach(m => { m.opacity = showAll ? 0.55 : isSelected ? 0.85 : 0.35 })
     })
 
-    // camera zoom
     if (sel >= 0) {
       const bbox = regions[sel].bbox
       const cx = (bbox.minX + bbox.maxX) / 2
@@ -602,14 +608,12 @@ function initThree(
     const t = leftClock.getElapsedTime()
     leftMat.uniforms.uTime.value = t
 
-    // Region hover
     leftRaycaster.setFromCamera(leftMouse2D, leftCam)
     const hits = leftRaycaster.intersectObjects(regionHitMeshes.map(r => r.mesh))
     const newHov = hits.length > 0 ? regionHitMeshes.find(r => r.mesh === hits[0].object)?.ri ?? -1 : -1
     if (newHov !== leftHoveredRi) {
       leftHoveredRi = newHov
       cb.onHoverRegion(newHov >= 0 ? regions[newHov].name : null)
-      // highlight hovered region fills briefly
       regionGroups.forEach((group, ri) => {
         if (ri === newHov && cb.getSelected() < 0) {
           group.fillMats.forEach(m => m.opacity = 0.22)
@@ -621,7 +625,6 @@ function initThree(
       })
     }
 
-    // Parallax — gentle tilt toward cursor
     const px = leftMouse.nx * 0.45, py = -leftMouse.ny * 0.30
     cam.curX += (cam.baseX + panX + px - cam.curX) * 0.06
     cam.curY += (cam.baseY + panY + py - cam.curY) * 0.06
@@ -629,7 +632,6 @@ function initThree(
     leftCam.position.set(cam.curX, cam.curY, cam.curZ)
     leftCam.lookAt(cam.lookX + panX, cam.lookY + panY, 0)
 
-    // Ripples
     for (let i = ripples.length - 1; i >= 0; i--) {
       const rp = ripples[i]
       const age = Math.min(1, (t - rp.born) / rp.life)
@@ -641,10 +643,7 @@ function initThree(
   }
   animateLeft()
 
-  // ╔══════════════════════════════════════════════════════════════════════╗
-  // ║  RIGHT PANEL — UMAP                                                 ║
-  // ╚══════════════════════════════════════════════════════════════════════╝
-
+  // ── RIGHT PANEL (UMAP) ──────────────────────────────────────────────────
   const rightRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
   rightRenderer.setPixelRatio(PR)
   rightRenderer.setSize(rightEl.clientWidth, rightEl.clientHeight)
@@ -669,7 +668,6 @@ function initThree(
   rightControls.minDistance = UMAP_CAM_MIN_DIST
   rightControls.maxDistance = UMAP_CAM_MAX_DIST
 
-  // UMAP points — 3D positions
   const umapXs = new Float32Array(n), umapYs = new Float32Array(n), umapZs = new Float32Array(n)
   recordings.forEach((rec, i) => { umapXs[i]=rec.umapX; umapYs[i]=rec.umapY; umapZs[i]=rec.umapZ })
   const rightGeo = makePointsGeom(umapXs, umapYs, umapZs)
@@ -680,7 +678,11 @@ function initThree(
   })
   rightScene.add(new THREE.Points(rightGeo, rightMat))
 
-  // Hover raycaster on UMAP
+  // User uploaded points group
+  const userGroup = new THREE.Group()
+  rightScene.add(userGroup)
+  const userMeshes: THREE.Mesh[] = []
+
   const rightRaycaster = new THREE.Raycaster()
   rightRaycaster.params.Points = { threshold: UMAP_RAYCASTER_THRESHOLD }
   const rightMouse2D = new THREE.Vector2(-9999, -9999)
@@ -696,7 +698,6 @@ function initThree(
   rightEl.addEventListener('mousemove', onRightMouseMove)
   rightEl.addEventListener('mouseleave', onRightMouseLeave)
 
-  // ── Right panel touch support — single tap triggers point hover/audio ──
   let rightTouchStart = { x: 0, y: 0, time: 0 }
   let rightTouchHoldTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -710,12 +711,21 @@ function initThree(
     const touch = e.changedTouches[0]
     const dx = touch.clientX - rightTouchStart.x
     const dy = touch.clientY - rightTouchStart.y
-    // Only treat as tap if minimal movement and short duration
     if (Math.sqrt(dx * dx + dy * dy) > 12 || Date.now() - rightTouchStart.time > 400) return
     const rect = rightEl.getBoundingClientRect()
     rightMouse2D.x =  ((touch.clientX - rect.left) / rect.width)  * 2 - 1
     rightMouse2D.y = -((touch.clientY - rect.top)  / rect.height) * 2 + 1
-    // Auto-clear selection after 3 s so the user can scroll away cleanly
+    
+    // Trigger tap selection if point hovered
+    if (lastHoveredIdx >= 0) {
+      if (clickedAudioIdx >= 0) stopAudio(clickedAudioIdx)
+      clickedAudioIdx = lastHoveredIdx
+      const rec = recordings[clickedAudioIdx]
+      playAudio(clickedAudioIdx, rec.file)
+      const parentRect = rightEl.parentElement?.getBoundingClientRect() || rect
+      cb.onSelectPoint(rec, { x: touch.clientX - parentRect.left, y: touch.clientY - parentRect.top })
+    }
+
     if (rightTouchHoldTimer) clearTimeout(rightTouchHoldTimer)
     rightTouchHoldTimer = setTimeout(() => { rightMouse2D.set(-9999, -9999) }, 3000)
   }
@@ -723,23 +733,25 @@ function initThree(
   rightEl.addEventListener('touchstart', onRightTouchStart, { passive: true })
   rightEl.addEventListener('touchend',   onRightTouchEnd,   { passive: true })
 
-  // ── Right panel click → play audio ───────────────────────────────────
-  // Audio is intentional (click/tap), not incidental (hover sweep).
+  // Right panel click → play audio & select point for species popup
   let clickedAudioIdx = -1
 
-  const onRightClick = () => {
+  const onRightClick = (e: MouseEvent) => {
     if (lastHoveredIdx < 0) {
-      // clicked empty space — stop whatever is playing
       if (clickedAudioIdx >= 0) { stopAudio(clickedAudioIdx); clickedAudioIdx = -1 }
+      cb.onSelectPoint(null)
     } else {
       if (clickedAudioIdx >= 0) stopAudio(clickedAudioIdx)
       clickedAudioIdx = lastHoveredIdx
-      playAudio(clickedAudioIdx, recordings[clickedAudioIdx].file)
+      const rec = recordings[clickedAudioIdx]
+      playAudio(clickedAudioIdx, rec.file)
+      const parentRect = rightEl.parentElement?.getBoundingClientRect() || rightEl.getBoundingClientRect()
+      cb.onSelectPoint(rec, { x: e.clientX - parentRect.left, y: e.clientY - parentRect.top })
     }
   }
   rightEl.addEventListener('click', onRightClick)
 
-  // ── Audio playback ────────────────────────────────────────────────────
+  // Audio playback
   type AudioEntry = { el: HTMLAudioElement; fadeTimer: ReturnType<typeof setInterval> | null }
   const activeAudio = new Map<number, AudioEntry>()
 
@@ -790,9 +802,6 @@ function initThree(
     const t = rightClock.getElapsedTime()
     rightMat.uniforms.uTime.value = t
 
-    // Point hover — use screen-space proximity so the visually nearest point
-    // wins, not just the closest along the ray (which ignores cursor offset).
-    // Also replicate the shader drift so projected positions match what renders.
     rightRaycaster.setFromCamera(rightMouse2D, rightCam)
     const hits = rightRaycaster.intersectObject(rightPointsObj)
     let hitIdx = -1
@@ -804,7 +813,6 @@ function initThree(
         const bx = posAttr.getX(hit.index)
         const by = posAttr.getY(hit.index)
         const bz = posAttr.getZ(hit.index)
-        // replicate UMAP_VERT drift
         const phase = bx * DRIFT_PHASE_X + by * DRIFT_PHASE_Y + bz * DRIFT_PHASE_Z
         _proj.set(
           bx + DRIFT_AMP_XY * Math.sin(t * DRIFT_FREQ_X + phase),
@@ -825,7 +833,6 @@ function initThree(
       if (hitIdx >= 0) {
         const rec = recordings[hitIdx]
         cb.onHoverPoint(rec)
-        // Pulse at lat/lon on left panel — only for active (non-greyed) points
         const sel = cb.getSelected()
         const isActive = sel < 0 || rec.regionIdx === sel
         if (isActive) {
@@ -837,12 +844,20 @@ function initThree(
       }
     }
 
+    // Animate user rings (billboard & pulse)
+    userGroup.children.forEach((child, i) => {
+      if (child instanceof THREE.Mesh && child.geometry instanceof THREE.RingGeometry) {
+        const pulse = 1.0 + 0.22 * Math.sin(t * 3.5 + i)
+        child.scale.set(pulse, pulse, pulse)
+        child.lookAt(rightCam.position)
+      }
+    })
+
     rightControls.update()
     rightRenderer.render(rightScene, rightCam)
   }
   animateRight()
 
-  // ── Resize ────────────────────────────────────────────────────────────
   const onResize = () => {
     leftCam.aspect = leftEl.clientWidth / leftEl.clientHeight
     leftCam.updateProjectionMatrix()
@@ -852,18 +867,58 @@ function initThree(
     rightCam.updateProjectionMatrix()
     rightRenderer.setSize(rightEl.clientWidth, rightEl.clientHeight)
   }
-  // Use ResizeObserver instead of window 'resize' so we also catch layout-driven
-  // size changes (e.g. the panel going from w-1/2 to full-width on mobile),
-  // which don't fire a window resize event.
   const resizeObserver = new ResizeObserver(onResize)
   resizeObserver.observe(leftEl)
   resizeObserver.observe(rightEl)
+  const addUserPoint = (rec: ClassificationResult) => {
+    // 1. Glowing marker sphere
+    const sphereGeom = new THREE.SphereGeometry(0.16, 24, 24)
+    const sphereMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#4ecdc4'),
+    })
+    const sphere = new THREE.Mesh(sphereGeom, sphereMat)
+    sphere.position.set(rec.umapCoords[0], rec.umapCoords[1], rec.umapCoords[2])
+    sphere.userData = { userRec: rec }
+    userGroup.add(sphere)
+    userMeshes.push(sphere)
 
-  // expose updateSelection, setMuted so React can call them
+    // 2. Pulsing outer halo ring
+    const ringGeom = new THREE.RingGeometry(0.24, 0.36, 32)
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#ffe66d'),
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending,
+    })
+    const ring = new THREE.Mesh(ringGeom, ringMat)
+    ring.position.copy(sphere.position)
+    userGroup.add(ring)
+
+    // 3. Smoothly animate camera target to focus on new point
+    const startTarget = rightControls.target.clone()
+    const endTarget = sphere.position.clone()
+    let lerpProgress = 0
+    const lerpTimer = setInterval(() => {
+      lerpProgress += 0.05
+      rightControls.target.lerpVectors(startTarget, endTarget, lerpProgress)
+      if (lerpProgress >= 1) clearInterval(lerpTimer)
+    }, 16)
+
+    // 4. Spawn ripple on map
+    if (typeof rec.lat === 'number' && typeof rec.lon === 'number') {
+      const [wx, wy] = ll2w(rec.lon, rec.lat)
+      spawnRipple(wx, wy, '#4ecdc4', -999)
+      setTimeout(() => spawnRipple(wx, wy, '#ffe66d', -999), 350)
+    }
+  }
+
+  // expose updateSelection, setMuted, addUserPoint so React can call them
   ;(leftEl as any).__updateSelection = updateSelection
   ;(rightEl as any).__setMuted = (m: boolean) => {
     activeAudio.forEach(entry => { entry.el.muted = m })
   }
+  ;(rightEl as any).__addUserPoint = addUserPoint
 
   return () => {
     cancelAnimationFrame(leftAnimId)
@@ -889,10 +944,80 @@ function initThree(
   }
 }
 
+function normalizeText(text?: string | null): string {
+  if (!text) return ''
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+}
+
+// ─── Open Tree of Life (OTT 3.7) API helper ──────────────────────────────────
+interface OpenTreeTaxon {
+  ottId?: number
+  rank?: string
+  order?: string
+  family?: string
+  genus?: string
+  className?: string
+  phylum?: string
+  kingdom?: string
+}
+
+async function fetchOpenTreeTaxon(rec: Recording): Promise<OpenTreeTaxon | null> {
+  const queryNames = [
+    `${rec.genus} ${rec.species}`.trim(),
+    rec.genus.trim(),
+  ].filter(Boolean)
+
+  try {
+    const matchRes = await fetch('https://api.opentreeoflife.org/v3/tnrs/match_names', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ names: queryNames }),
+    })
+    if (!matchRes.ok) return null
+    const matchJson = await matchRes.json()
+    const firstResult = matchJson.results?.find((r: any) => r.matches && r.matches.length > 0)
+    const match = firstResult?.matches?.[0]
+    if (!match?.taxon?.ott_id) return null
+
+    const ottId: number = match.taxon.ott_id
+    const infoRes = await fetch('https://api.opentreeoflife.org/v3/taxonomy/taxon_info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ott_id: ottId, include_lineage: true }),
+    })
+    if (!infoRes.ok) return { ottId, rank: match.taxon.rank }
+    const infoJson = await infoRes.json()
+    const lineage: any[] = infoJson.lineage || []
+
+    const genus = lineage.find(l => l.rank === 'genus')?.name || rec.genus
+    const family = lineage.find(l => l.rank === 'family')?.name
+    const order = lineage.find(l => l.rank === 'order')?.name
+    const className = lineage.find(l => l.rank === 'class')?.name
+    const phylum = lineage.find(l => l.rank === 'phylum')?.name
+    const kingdom = lineage.find(l => l.rank === 'kingdom')?.name
+
+    return {
+      ottId,
+      rank: match.taxon.rank || infoJson.rank,
+      order,
+      family,
+      genus,
+      className,
+      phylum,
+      kingdom,
+    }
+  } catch (e) {
+    console.warn('Open Tree of Life query error:', e)
+    return null
+  }
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
-export default function AcousticMap() {
+export default function AcousticMapDemo() {
   const leftRef     = useRef<HTMLDivElement>(null)
   const rightRef    = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const popupRef    = useRef<HTMLDivElement>(null)
   const selectedRef = useRef(-1)
 
   const [mountKey, setMountKey] = useState(0)
@@ -902,13 +1027,38 @@ export default function AcousticMap() {
   const [selectedIdx, setSelectedIdx] = useState(-1)
   const [hoveredPoint, setHoveredPoint] = useState<{ name: string; region: string } | null>(null)
   const [dataRef, setDataRef] = useState<AppData | null>(null)
-  const mutedRef = useRef(true)
-  const [muted, setMuted] = useState(true)
+  const mutedRef = useRef(false)
+  const [muted, setMuted] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [activePanel, setActivePanel] = useState<'map' | 'umap'>('map')
   const [mapEngaged, setMapEngaged] = useState(false)
   const [umapEngaged, setUmapEngaged] = useState(false)
   const [legendOpen, setLegendOpen] = useState(false)
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const [userRecordings, setUserRecordings] = useState<ClassificationResult[]>([])
+
+  const handleClassifiedAudio = (result: ClassificationResult) => {
+    setUserRecordings(prev => [...prev, result])
+    if ((rightRef.current as any)?.__addUserPoint) {
+      ;(rightRef.current as any).__addUserPoint(result)
+    }
+  }
+
+  // Species popup & pointer preview state
+  const [selectedPoint, setSelectedPoint] = useState<Recording | null>(null)
+  const [speciesInfo, setSpeciesInfo] = useState<SpeciesDetails | null>(null)
+  const [speciesLoading, setSpeciesLoading] = useState(false)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [pointerBadge, setPointerBadge] = useState<{
+    x: number
+    y: number
+    recId: number
+    commonName: string
+    scientificName: string
+    photoUrl?: string
+    loadingPhoto: boolean
+  } | null>(null)
+  const speciesPhotoCache = useRef<Map<string, { photoUrl: string; thumbUrl: string; photoAttribution: string }>>(new Map())
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -923,6 +1073,166 @@ export default function AcousticMap() {
     setMuted(next)
     ;(rightRef.current as any)?.__setMuted(next)
   }
+
+  // Fetch species info when selectedPoint changes
+  useEffect(() => {
+    if (!selectedPoint) {
+      setSpeciesInfo(null)
+      return
+    }
+
+    let active = true
+    setSpeciesLoading(true)
+
+    async function fetchBirdInfo(rec: Recording) {
+      const searchNames = [
+        rec.englishName,
+        `${rec.genus} ${rec.species}`,
+        rec.genus,
+      ].filter(Boolean)
+
+      let wikiData: any = null
+      let inatData: any = null
+      let ottData: OpenTreeTaxon | null = null
+
+      // Kick off Open Tree of Life fetch
+      const ottPromise = fetchOpenTreeTaxon(rec).catch(() => null)
+
+      // Try Wikipedia
+      for (const name of searchNames) {
+        try {
+          const sumRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`)
+          if (sumRes.ok) {
+            const json = await sumRes.json()
+            if (json.extract && json.type !== 'disambiguation') {
+              wikiData = json
+              break
+            }
+          }
+          const searchRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(name + ' bird')}&format=json&origin=*`)
+          if (searchRes.ok) {
+            const sJson = await searchRes.json()
+            const hits = sJson.query?.search
+            if (hits && hits.length > 0) {
+              const dRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(hits[0].title)}`)
+              if (dRes.ok) {
+                const dJson = await dRes.json()
+                if (dJson.extract) { wikiData = dJson; break }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Wikipedia query error', e)
+        }
+      }
+
+      // Try iNaturalist
+      const normEnglish = normalizeText(rec.englishName)
+      const normSci = normalizeText(`${rec.genus} ${rec.species}`)
+      for (const name of searchNames) {
+        try {
+          let res = await fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(name)}&taxon_id=3&per_page=10`)
+          let data = res.ok ? await res.json() : null
+          // Fallback without taxon_id=3 for non-bird wildlife (e.g. bats)
+          if (!data?.results?.length) {
+            res = await fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(name)}&per_page=10`)
+            data = res.ok ? await res.json() : null
+          }
+          if (data?.results && data.results.length > 0) {
+            const exact = data.results.find((r: any) => {
+              const c = normalizeText(r.preferred_common_name)
+              const s = normalizeText(r.name)
+              return c === normEnglish || s === normSci || c.includes(normEnglish)
+            })
+            inatData = exact || data.results.find((r: any) => r.rank === 'species' || r.rank === 'subspecies') || data.results[0]
+            if (inatData) break
+          }
+        } catch (e) {
+          console.warn('iNaturalist query error', e)
+        }
+      }
+
+      ottData = await ottPromise
+
+      if (!active) return
+
+      const common = inatData?.preferred_common_name || rec.englishName || wikiData?.title || `${rec.genus} ${rec.species}`
+      const scientific = inatData?.name || `${rec.genus} ${rec.species}`
+      const photo = wikiData?.originalimage?.source || wikiData?.thumbnail?.source || inatData?.default_photo?.medium_url || ''
+      // A dedicated small image for the pointer badge's 48px thumbnail — Wikipedia's
+      // originalimage (used above for the full-size info panel) can be several MB;
+      // there's no reason to pull that just to paint a tiny corner thumbnail. Falls back
+      // to `photo` only if neither source offers a real small variant.
+      const thumbPhoto = wikiData?.thumbnail?.source || inatData?.default_photo?.square_url || photo
+      const photoAttribution = wikiData?.originalimage?.source ? 'Wikimedia Commons' : (inatData?.default_photo?.attribution || 'iNaturalist')
+      
+      const status = inatData?.conservation_status?.status_name ||
+        (wikiData?.extract?.toLowerCase().includes('critically endangered') ? 'Critically Endangered' :
+        (wikiData?.extract?.toLowerCase().includes('endangered') ? 'Endangered' :
+        (wikiData?.extract?.toLowerCase().includes('vulnerable') ? 'Vulnerable' : 'Identified')))
+
+      // Resolve taxonomy: combine iNaturalist and Open Tree of Life (OTT 3.7.3)
+      const inatOrder = inatData?.ancestors?.find((a: any) => a.rank === 'order')?.name
+      const order = inatOrder || ottData?.order || '-'
+
+      const inatFamily = inatData?.ancestors?.find((a: any) => a.rank === 'family')?.name
+      const family = inatFamily || ottData?.family || '-'
+
+      const inatGenus = inatData?.ancestors?.find((a: any) => a.rank === 'genus')?.name
+      const genus = inatGenus || ottData?.genus || rec.genus || '-'
+
+      const inatClass = inatData?.ancestors?.find((a: any) => a.rank === 'class')?.name
+      const className = ottData?.className || inatClass || (rec.genus === 'Chalinolobus' ? 'Mammalia' : 'Aves')
+
+      const ottUrl = ottData?.ottId ? `https://tree.opentreeoflife.org/taxonomy/browse?id=${ottData.ottId}` : undefined
+
+      setSpeciesInfo({
+        commonName: common,
+        scientificName: scientific,
+        description: wikiData?.description || (inatData?.rank ? `${inatData.rank.toUpperCase()} in Class ${className}` : `Native or introduced wildlife of New Zealand (${className})`),
+        extract: wikiData?.extract || 'Observation recorded and archived within the Listening Lab acoustic PAM dataset.',
+        photoUrl: photo,
+        photoAttribution,
+        conservationStatus: status,
+        rank: inatData?.rank || ottData?.rank || 'species',
+        order,
+        family,
+        genus,
+        class: className,
+        observationsCount: inatData?.observations_count ? inatData.observations_count.toLocaleString() : '1,000+',
+        wikiUrl: wikiData?.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(common)}`,
+        inatUrl: inatData?.id ? `https://www.inaturalist.org/taxa/${inatData.id}` : `https://www.inaturalist.org/search?q=${encodeURIComponent(common)}`,
+        ottUrl,
+        audioUrl: rec.file || `https://xeno-canto.org/explore?query=${encodeURIComponent(scientific)}`,
+      })
+      setSpeciesLoading(false)
+
+      // Cache the photo for instantaneous display on subsequent clicks
+      if (photo) {
+        speciesPhotoCache.current.set(`${rec.genus}_${rec.species}`, { photoUrl: photo, thumbUrl: thumbPhoto, photoAttribution })
+      }
+
+      // Update pointer badge with resolved photo and details — the small badge thumbnail
+      // uses thumbPhoto, not the full-size photo (see thumbPhoto above).
+      setPointerBadge(prev => {
+        if (!prev) return null
+        if (prev.recId === rec.id) {
+          return {
+            ...prev,
+            commonName: common,
+            scientificName: scientific,
+            photoUrl: thumbPhoto || prev.photoUrl,
+            loadingPhoto: false,
+          }
+        }
+        return prev
+      })
+    }
+
+    fetchBirdInfo(selectedPoint)
+
+    return () => { active = false }
+  }, [selectedPoint])
 
   useEffect(() => {
     if (!leftRef.current || !rightRef.current) return
@@ -939,6 +1249,24 @@ export default function AcousticMap() {
           setHoveredPoint({
             name: rec.englishName || `${rec.genus} ${rec.species}`,
             region: rec.regionIdx >= 0 ? data.regions[rec.regionIdx].name : 'Unassigned',
+          })
+        },
+        onSelectPoint: (rec: Recording | null, pos?: { x: number; y: number } | null) => {
+          setSelectedPoint(rec)
+          if (!rec || !pos) {
+            setPointerBadge(null)
+            return
+          }
+          const key = `${rec.genus}_${rec.species}`
+          const cached = speciesPhotoCache.current.get(key)
+          setPointerBadge({
+            x: pos.x,
+            y: pos.y,
+            recId: rec.id,
+            commonName: rec.englishName || `${rec.genus} ${rec.species}`,
+            scientificName: `${rec.genus} ${rec.species}`,
+            photoUrl: cached?.thumbUrl,
+            loadingPhoto: !cached,
           })
         },
         onSelectRegion: (idx: number) => {
@@ -974,21 +1302,38 @@ export default function AcousticMap() {
     return () => { unmounted = true; cleanup?.() }
   }, [])
 
-
   const selectedRegion = dataRef && selectedIdx >= 0 ? dataRef.regions[selectedIdx] : null
 
   return (
-    <section id="acoustic-map" key={mountKey} className="relative w-full bg-ocean-dark text-white overflow-hidden" style={{ minHeight: '100vh' }}>
+    <section id="acoustic-map-demo" key={mountKey} className="relative w-full bg-ocean-dark text-white overflow-hidden pb-16">
+      
       {/* Header */}
-      <div className="relative z-10 pt-24 pb-8 text-center px-4 flex justify-center pointer-events-none">
-        <div className="max-w-2xl w-full pointer-events-auto">
-          <h2 className="font-serif text-4xl md:text-5xl mb-3">Acoustic Map of Aotearoa</h2>
-          <p className="text-gray-200 max-w-xl pb-4 mx-auto text-sm">We are building a map of the sounds of nature.</p>
-          <p className="text-gray-400 max-w-xl mx-auto text-sm">
-            {selectedRegion
-              ? <>Showing <span className="text-white">{selectedRegion.name}</span> — click elsewhere on the map to return</>
-              : 'Click a region on the map to explore its acoustic space. Hover UMAP points to locate them geographically.'}
+      <div className="relative z-10 pt-20 pb-6 text-center px-4 flex justify-center pointer-events-none">
+        <div className="max-w-3xl w-full pointer-events-auto">
+          {/* <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#4ecdc4]/10 border border-[#4ecdc4]/20 text-[#4ecdc4] text-xs uppercase tracking-widest font-semibold mb-3">
+            <span>✨ Interactive Species Demo</span>
+          </div> */}
+          <h1 className="font-serif text-4xl md:text-5xl mb-3">Sound Map of Aotearoa</h1>
+          <p className="text-gray-200 max-w-xl pb-2 mx-auto text-sm">
+            Click any point in the Point Map to listen to its vocalisation and inspect species photographs and biology below.
           </p>
+          <p className="text-gray-400 max-w-xl mx-auto text-xs">
+            {selectedRegion
+              ? <>Filtered to <span className="text-white">{selectedRegion.name}</span> — click elsewhere on the map to return</>
+              : 'Drag to orbit the 3D embedding space. Click any point to select species.'}
+          </p>
+          {/* <div className="mt-4 flex items-center justify-center gap-3">
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="bg-[#4ecdc4]/20 hover:bg-[#4ecdc4]/35 backdrop-blur-md border border-[#4ecdc4]/60 rounded-full px-5 py-2 text-xs font-semibold text-white transition-all shadow-lg shadow-[#4ecdc4]/20 flex items-center gap-2 cursor-pointer"
+              title="Upload audio to classify with Perch v2 and add to 3D map"
+            >
+              <svg className="w-4 h-4 text-[#4ecdc4]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z" />
+              </svg>
+              <span>Upload Audio &amp; Classify</span>
+            </button>
+          </div> */}
         </div>
       </div>
 
@@ -1005,23 +1350,24 @@ export default function AcousticMap() {
           >Point Map</button>
         </div>
       ) : (
-        <div className="flex text-xs tracking-widest uppercase text-white/30 px-6 mb-2">
-          <div className="w-1/2 text-center">Geographic — Aotearoa NZ</div>
-          <div className="w-1/2 text-center">
-            {selectedRegion ? `${selectedRegion.name} · PERCH v2 Embedding` : 'PERCH v2 Embedding Space'}
+        <div className="flex text-xs tracking-widest uppercase text-white/40 px-6 mb-2">
+          <div className="w-1/2 text-center">Geographic Map — Aotearoa NZ</div>
+          <div className="w-1/2 text-center flex items-center justify-center gap-1.5">
+            <span>Point Map — PERCH v2 Embedding Space</span>
+            <span className="text-[10px] bg-[#4ecdc4]/20 text-[#4ecdc4] px-1.5 py-0.5 rounded font-normal">Clickable</span>
           </div>
         </div>
       )}
 
-      {/* Panels */}
-      <div className={`relative ${isMobile ? '' : 'flex'}`} style={{ height: '76vh' }}>
-        {/* Left / Map panel — always in DOM so Three.js has a valid size */}
+      {/* Interactive Panels */}
+      <div ref={containerRef} className={`relative ${isMobile ? '' : 'flex'}`} style={{ height: '70vh' }}>
+        {/* Left / Map panel */}
         <div
           ref={leftRef}
           className={`cursor-crosshair ${isMobile ? 'absolute inset-0' : 'w-1/2 h-full'} transition-opacity duration-200${isMobile && activePanel !== 'map' ? ' opacity-0 pointer-events-none' : ''}`}
         />
 
-        {/* Map engagement overlay (mobile only) */}
+        {/* Map engagement overlay (mobile) */}
         {isMobile && activePanel === 'map' && !mapEngaged && (
           <div
             className="absolute inset-0 z-30 flex items-center justify-center"
@@ -1035,7 +1381,7 @@ export default function AcousticMap() {
           </div>
         )}
 
-        {/* Vertical divider (desktop only) */}
+        {/* Vertical divider (desktop) */}
         {!isMobile && (
           <>
             <div className="absolute inset-y-0 left-1/2 w-px bg-white/10 pointer-events-none" />
@@ -1047,13 +1393,13 @@ export default function AcousticMap() {
           </>
         )}
 
-        {/* Right / UMAP panel — always in DOM so Three.js has a valid size */}
+        {/* Right / UMAP panel */}
         <div
           ref={rightRef}
           className={`${isMobile ? 'absolute inset-0' : 'w-1/2 h-full'} transition-opacity duration-200${isMobile && activePanel !== 'umap' ? ' opacity-0 pointer-events-none' : ''}`}
         />
 
-        {/* UMAP engagement overlay (mobile only) */}
+        {/* UMAP engagement overlay (mobile) */}
         {isMobile && activePanel === 'umap' && !umapEngaged && (
           <div
             className="absolute inset-0 z-30 flex items-center justify-center"
@@ -1062,16 +1408,16 @@ export default function AcousticMap() {
           >
             <div className="border border-white/20 rounded-2xl px-8 py-5 text-center bg-black/20">
               <p className="text-white text-sm font-medium mb-1">Tap to explore sounds</p>
-              <p className="text-white/50 text-xs">Tap a point to play · drag to orbit</p>
+              <p className="text-white/50 text-xs">Tap a point to play audio and view bird info</p>
             </div>
           </div>
         )}
 
-        {/* Mute / unmute button — visible on UMAP panel */}
+        {/* Mute button */}
         {(!isMobile || activePanel === 'umap') && (
           <button
             onClick={toggleMute}
-            className="absolute top-3 left-[calc(50%-1.125em)] z-20 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors"
+            className="absolute top-3 left-[calc(50%-1.125em)] z-20 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors"
             title={muted ? 'Unmute audio' : 'Mute audio'}
           >
             {muted ? (
@@ -1081,7 +1427,7 @@ export default function AcousticMap() {
                 <line x1="17" y1="9" x2="23" y2="15" />
               </svg>
             ) : (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4 text-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4 text-[#4ecdc4]">
                 <path d="M11 5 6 9H3v6h3l5 4V5z" />
                 <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
                 <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
@@ -1090,55 +1436,76 @@ export default function AcousticMap() {
           </button>
         )}
 
-        {/* Contribute button — at divider on desktop, below panels on mobile */}
-        {!isMobile && (
-          <div className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none" style={{ bottom: '33%' }}>
-            <a
-              href="/contact"
-              className="pointer-events-auto bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-8 py-3 text-sm font-medium text-white hover:bg-white/20 transition-colors whitespace-nowrap"
-            >
-              Contribute to the Map
-            </a>
+        {/* Floating Pointer Badge on point click */}
+        {pointerBadge && (
+          <div
+            className="absolute z-30 transition-all duration-150 ease-out pointer-events-auto"
+            style={{
+              left: `${Math.min(Math.max(pointerBadge.x + 18, 12), (containerRef.current?.clientWidth || 800) - 270)}px`,
+              top: `${Math.min(Math.max(pointerBadge.y - 36, 12), (containerRef.current?.clientHeight || 500) - 86)}px`,
+            }}
+          >
+            <div className="bg-ocean-card/95 backdrop-blur-md border border-[#4ecdc4]/40 shadow-2xl rounded-2xl p-2.5 flex items-center gap-3 animate-fadeIn">
+              {/* Bird thumbnail or skeleton */}
+              <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-black/60 border border-white/15 shrink-0 flex items-center justify-center">
+                {pointerBadge.photoUrl ? (
+                  <img
+                    src={pointerBadge.photoUrl}
+                    alt={pointerBadge.commonName}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover object-center"
+                  />
+                ) : pointerBadge.loadingPhoto ? (
+                  <div className="w-full h-full flex items-center justify-center bg-white/10">
+                    <svg className="animate-spin h-4 w-4 text-[#4ecdc4]" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                  </div>
+                ) : (
+                  <svg className="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="M21 15l-5-5L5 21" />
+                  </svg>
+                )}
+              </div>
+
+              {/* Bird names & sound status */}
+              <div className="min-w-0 pr-1">
+                <p className="text-xs font-bold text-white truncate max-w-[130px] sm:max-w-[160px] leading-tight">
+                  {pointerBadge.commonName}
+                </p>
+                <p className="text-[10px] text-[#4ecdc4] italic truncate max-w-[130px] sm:max-w-[160px]">
+                  {pointerBadge.scientificName}
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4ecdc4] opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#4ecdc4]"></span>
+                  </span>
+                  <span className="text-[9px] uppercase tracking-wider text-[#4ecdc4] font-mono font-medium">
+                    Vocalising
+                  </span>
+                </div>
+              </div>
+
+              {/* Dismiss button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setPointerBadge(null)
+                }}
+                className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white flex items-center justify-center text-[10px] ml-0.5 shrink-0 transition-colors"
+                title="Dismiss badge"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         )}
       </div>
-
-      {/* Mobile: legend (collapsible) + contribute button — below panels */}
-      {isMobile && (
-        <div className="px-4 pb-6 pt-2">
-          {loaded && !selectedRegion && (
-            <div className="mb-4 flex flex-col items-center">
-              <button
-                onClick={() => setLegendOpen(o => !o)}
-                className="flex items-center gap-2 text-xs tracking-widest uppercase text-white/50 hover:text-white/80 transition-colors mb-2"
-              >
-                <span>Legend</span>
-                <svg className={`w-3 h-3 transition-transform ${legendOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {legendOpen && (
-                <div className="flex flex-wrap gap-x-4 gap-y-1.5 pl-1">
-                  {dataRef?.regions.map((r, i) => (
-                    <span key={i} className="flex items-center gap-1.5 text-xs text-gray-400">
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: r.color }} />
-                      {r.name}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          <div className="flex justify-center">
-            <a
-              href="/contact"
-              className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-8 py-3 text-sm font-medium text-white hover:bg-white/20 transition-colors"
-            >
-              Contribute to the Map
-            </a>
-          </div>
-        </div>
-      )}
 
       {/* Loading / error */}
       {!loaded && !error && (
@@ -1152,29 +1519,30 @@ export default function AcousticMap() {
         </div>
       )}
 
-      {/* Hover label — region (left panel) */}
+      {/* Hover tooltip — region (left panel) */}
       {hoveredRegion && !selectedRegion && (
-        <div className="absolute bottom-1/3 left-6 pointer-events-none z-20">
-          <div className="bg-black/50 backdrop-blur-md border border-white/10 rounded-xl px-4 py-3">
+        <div className="absolute bottom-[35%] left-6 pointer-events-none z-20">
+          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-4 py-3">
             <p className="text-white text-sm font-medium">{hoveredRegion}</p>
-            <p className="text-white/40 text-xs mt-0.5">Click to explore</p>
+            <p className="text-white/40 text-xs mt-0.5">Click to filter</p>
           </div>
         </div>
       )}
 
-      {/* Hover label — point (right panel) */}
+      {/* Hover tooltip — point (right panel) */}
       {hoveredPoint && (
-        <div className="absolute bottom-1/3 right-6 pointer-events-none z-20">
-          <div className="bg-black/50 backdrop-blur-md border border-white/10 rounded-xl px-4 py-3 max-w-[200px]">
-            <p className="text-white text-sm font-medium leading-tight">{hoveredPoint.name}</p>
-            <p className="text-white/40 text-xs mt-1">{hoveredPoint.region}</p>
+        <div className="absolute bottom-[35%] right-6 pointer-events-none z-20">
+          <div className="bg-black/60 backdrop-blur-md border border-[#4ecdc4]/30 rounded-xl px-4 py-3 max-w-[220px]">
+            <p className="text-[#4ecdc4] text-sm font-medium leading-tight">{hoveredPoint.name}</p>
+            <p className="text-white/50 text-xs mt-1">{hoveredPoint.region}</p>
+            <p className="text-white/40 text-[10px] mt-1">Click to play & view info</p>
           </div>
         </div>
       )}
 
-      {/* Selected region chip */}
+      {/* Selected region pill */}
       {selectedRegion && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
+        <div className="mt-4 flex justify-center z-20">
           <button
             onClick={() => {
               selectedRef.current = -1
@@ -1190,20 +1558,242 @@ export default function AcousticMap() {
         </div>
       )}
 
-      {/* Legend — desktop only (mobile legend is in normal flow below panels) */}
-      {loaded && !selectedRegion && !isMobile && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-wrap justify-center gap-x-4 gap-y-1 max-w-2xl px-4">
-          {dataRef?.regions.map((r, i) => (
-            <span key={i} className="flex items-center gap-1 text-xs text-gray-400">
-              <span className="w-2 h-2 rounded-full" style={{ background: r.color }} />
-              {r.name}
-            </span>
-          ))}
+      {/* ─── BELOW-MAP BIRD INFORMATION POPUP / CARD ──────────────────────────── */}
+      <div ref={popupRef} className="max-w-5xl mx-auto px-6 mt-8 z-30 relative">
+        
+        {/* State A: Selected Recording & Species Details */}
+        {selectedPoint && (
+          <div className="bg-ocean-card/90 backdrop-blur-xl border border-[#4ecdc4]/30 rounded-2xl shadow-2xl overflow-hidden animate-fadeIn transition-all">
+            
+            {/* Top Bar with dismiss button */}
+            <div className="flex items-center justify-between px-6 py-3.5 bg-black/40 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#4ecdc4] animate-pulse"></span>
+                <span className="text-xs uppercase tracking-widest font-semibold text-[#4ecdc4]">
+                  Selected Recording #{selectedPoint.id}
+                </span>
+                <span className="text-xs text-gray-400 hidden sm:inline">
+                  • {selectedPoint.regionIdx >= 0 && dataRef ? dataRef.regions[selectedPoint.regionIdx].name : 'New Zealand'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {selectedPoint.file && (
+                  <a
+                    href={selectedPoint.file}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-gray-400 hover:text-white flex items-center gap-1 transition-colors"
+                  >
+                    <span>Sound File</span>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                )}
+                <button
+                  onClick={() => setSelectedPoint(null)}
+                  className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-xs transition-colors"
+                  title="Close popup"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Content Area */}
+            {speciesLoading ? (
+              <div className="p-8 grid md:grid-cols-12 gap-6 animate-pulse">
+                <div className="md:col-span-4 aspect-[4/3] md:aspect-auto md:h-72 bg-white/10 rounded-xl"></div>
+                <div className="md:col-span-8 space-y-4">
+                  <div className="h-6 w-28 bg-white/10 rounded"></div>
+                  <div className="h-8 w-2/3 bg-white/10 rounded"></div>
+                  <div className="h-4 w-1/3 bg-white/10 rounded"></div>
+                  <div className="h-20 w-full bg-white/10 rounded"></div>
+                </div>
+              </div>
+            ) : speciesInfo ? (
+              <div className="grid md:grid-cols-12">
+                
+                {/* Photo Column */}
+                <div className="md:col-span-4 relative bg-black/60 flex flex-col items-center justify-center min-h-[260px] md:min-h-[340px] group overflow-hidden border-b md:border-b-0 md:border-r border-white/10">
+                  {speciesInfo.photoUrl ? (
+                    <>
+                      <img
+                        src={speciesInfo.photoUrl}
+                        alt={speciesInfo.commonName}
+                        onClick={() => setLightboxOpen(true)}
+                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300 cursor-pointer"
+                      />
+                      <div
+                        onClick={() => setLightboxOpen(true)}
+                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                      >
+                        <span className="bg-black/75 text-white text-xs px-3 py-1.5 rounded-full border border-white/20 flex items-center gap-1.5">
+                          🔍 Click to expand
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-gray-500 text-xs p-6 text-center">
+                      No photo directly available for this taxon
+                    </div>
+                  )}
+                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent p-3 text-[11px] text-gray-400 truncate">
+                    {speciesInfo.photoAttribution}
+                  </div>
+                </div>
+
+                {/* Info Column */}
+                <div className="md:col-span-8 p-6 sm:p-7 flex flex-col justify-between">
+                  <div>
+                    {/* Status & Badges */}
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <span className="text-[11px] px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#4ecdc4]/20 text-[#4ecdc4] border border-[#4ecdc4]/30">
+                        {speciesInfo.conservationStatus}
+                      </span>
+                      <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-white/10 text-gray-300 font-medium capitalize">
+                        {speciesInfo.rank}
+                      </span>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 text-gray-400">
+                        Lat: {selectedPoint.lat.toFixed(2)}°, Lon: {selectedPoint.lon.toFixed(2)}°
+                      </span>
+                    </div>
+
+                    {/* Names */}
+                    <h2 className="font-serif text-3xl sm:text-4xl font-bold text-white leading-tight">
+                      {speciesInfo.commonName}
+                    </h2>
+                    <p className="text-[#4ecdc4] italic font-serif text-base mt-0.5 mb-3">
+                      {speciesInfo.scientificName}
+                    </p>
+
+                    {/* Short Description */}
+                    <p className="text-xs text-gray-400 mb-3 border-b border-white/10 pb-2">
+                      {speciesInfo.description}
+                    </p>
+
+                    {/* Encyclopedic Summary */}
+                    <p className="text-sm text-gray-300 leading-relaxed mb-5 max-h-32 overflow-y-auto pr-2">
+                      {speciesInfo.extract}
+                    </p>
+
+                    {/* Taxonomy Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs bg-black/25 p-3 rounded-xl border border-white/5 mb-4">
+                      <div>
+                        <span className="text-gray-500 block text-[10px] uppercase">Class</span>
+                        <span className="text-white font-medium truncate block">{speciesInfo.class || 'Aves'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block text-[10px] uppercase">Order</span>
+                        <span className="text-white font-medium truncate block">{speciesInfo.order}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block text-[10px] uppercase">Family</span>
+                        <span className="text-white font-medium truncate block">{speciesInfo.family}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block text-[10px] uppercase">Genus</span>
+                        <span className="text-white font-medium truncate block">{speciesInfo.genus}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block text-[10px] uppercase">Sightings</span>
+                        <span className="text-white font-medium truncate block">{speciesInfo.observationsCount}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* External Links */}
+                  <div className="flex flex-wrap gap-2 pt-3 border-t border-white/10">
+                    <a
+                      href={speciesInfo.wikiUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-white transition-colors"
+                    >
+                      Wikipedia ↗
+                    </a>
+                    <a
+                      href={speciesInfo.inatUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-white transition-colors"
+                    >
+                      iNaturalist ↗
+                    </a>
+                    {speciesInfo.ottUrl && (
+                      <a
+                        href={speciesInfo.ottUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3.5 py-1.5 rounded-lg bg-[#4ecdc4]/10 hover:bg-[#4ecdc4]/20 text-xs text-[#4ecdc4] border border-[#4ecdc4]/30 transition-colors"
+                        title="View taxon on Open Tree of Life (OTT 3.7.3)"
+                      >
+                        Open Tree of Life ↗
+                      </a>
+                    )}
+                    <a
+                      href={`https://xeno-canto.org/explore?query=${encodeURIComponent(speciesInfo.scientificName)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3.5 py-1.5 rounded-lg bg-[#4ecdc4]/20 hover:bg-[#4ecdc4]/30 text-[#4ecdc4] border border-[#4ecdc4]/30 text-xs transition-colors"
+                    >
+                      🔊 Recordings on Xeno-Canto ↗
+                    </a>
+                  </div>
+
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* State B: Prompt / Guidance Banner when no point is selected */}
+        {!selectedPoint && (
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center text-gray-400">
+            <div className="text-2xl mb-2">💡</div>
+            <p className="text-sm text-gray-300 font-medium">
+              Click any point in the <span className="text-[#4ecdc4]">Point Map</span> above to listen to its audio and see its photo and biological details.
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              You can also drag to rotate the 3D embedding space or click a region on the left map to filter the points.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Lightbox Modal */}
+      {lightboxOpen && speciesInfo?.photoUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-md"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <button
+            onClick={() => setLightboxOpen(false)}
+            className="absolute top-6 right-6 text-white p-2 rounded-full bg-white/10 hover:bg-white/20"
+          >
+            ✕
+          </button>
+          <img
+            src={speciesInfo.photoUrl}
+            alt={speciesInfo.commonName}
+            className="max-h-[80vh] max-w-full rounded-xl object-contain shadow-2xl"
+          />
+          <p className="text-gray-300 text-xs mt-3 font-light">
+            {speciesInfo.commonName} ({speciesInfo.scientificName}) — {speciesInfo.photoAttribution}
+          </p>
         </div>
       )}
 
-      <div className="pointer-events-none absolute inset-0"
-        style={{ background: 'radial-gradient(ellipse at center, transparent 60%, #0a162866 100%)' }} />
+      {/* Audio Upload & Classification Modal */}
+      <AudioUploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        defaultLat={-41.2}
+        defaultLon={172.5}
+        referenceCentroids={dataRef?.referenceCentroids}
+        onClassified={handleClassifiedAudio}
+      />
 
     </section>
   )
