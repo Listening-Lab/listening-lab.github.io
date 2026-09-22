@@ -10,6 +10,7 @@ import {
   deleteAsset,
   listFolders,
   listDetections,
+  nzModelVersion,
   type Asset,
   type AssetUpdatePayload,
   type Detection,
@@ -74,21 +75,35 @@ function DeleteConfirmDialog({
 function PredictionsPanel({ projectId, assetId }: { projectId: string; assetId: string }) {
   const [detections, setDetections] = useState<Detection[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // NZ-restricted top-5 is the default everywhere predictions are shown (worker.py
+  // computes it alongside the unfiltered top-5) — most uploads are NZ field recordings,
+  // so this is the relevant view by default, with a toggle back to the full global list.
+  const [showAll, setShowAll] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    listDetections(projectId, { assetId })
+    setDetections(null)
+    listDetections(projectId, { assetId, modelVersion: showAll ? undefined : nzModelVersion() })
       .then((data) => { if (!cancelled) setDetections(data) })
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load predictions') })
     return () => { cancelled = true }
-  }, [projectId, assetId])
+  }, [projectId, assetId, showAll])
 
   return (
     <div className="bg-white/5 border border-white/10 rounded-lg p-6">
-      <h2 className="font-serif text-xl text-white mb-1">Detected Species</h2>
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="font-serif text-xl text-white">Detected Species</h2>
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="text-xs text-gray-400 hover:text-white underline shrink-0"
+        >
+          {showAll ? 'Show NZ species only' : 'Show all species'}
+        </button>
+      </div>
       <p className="text-gray-400 text-xs mb-5 leading-relaxed">
         Score is a raw model output, not a calibrated confidence — it's the top match per 5-second
         window, not a percentage certainty.
+        {!showAll && ' Restricted to species plausible in New Zealand.'}
       </p>
 
       {error && <p className="text-red-500 text-sm">Could not load predictions: {error}</p>}
@@ -106,6 +121,7 @@ function PredictionsPanel({ projectId, assetId }: { projectId: string; assetId: 
                 <th className="pb-2 pr-4 font-medium">Window</th>
                 <th className="pb-2 pr-4 font-medium">Top match</th>
                 <th className="pb-2 pr-4 font-medium">Score</th>
+                {showAll && <th className="pb-2 pr-4 font-medium">Model</th>}
               </tr>
             </thead>
             <tbody>
@@ -115,6 +131,7 @@ function PredictionsPanel({ projectId, assetId }: { projectId: string; assetId: 
                   <td className="py-2 pr-4 text-gray-300 font-mono">{d.windowSeconds}s</td>
                   <td className="py-2 pr-4 text-white italic">{d.speciesCode}</td>
                   <td className="py-2 pr-4 text-gray-300 font-mono">{d.score.toFixed(3)}</td>
+                  {showAll && <td className="py-2 pr-4 text-gray-500 font-mono text-xs">{d.modelVersion}</td>}
                 </tr>
               ))}
             </tbody>

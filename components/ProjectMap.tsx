@@ -6,7 +6,6 @@ import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { TerraDraw, TerraDrawPolygonMode, TerraDrawSelectMode } from 'terra-draw'
 import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter'
-import Link from 'next/link'
 import {
   listAssets,
   listDetections,
@@ -14,10 +13,13 @@ import {
   createRegion,
   updateRegion,
   deleteRegion,
+  listDevices,
   type Asset,
   type Detection,
   type Region as ApiRegion,
+  type Device,
 } from '@/lib/apiClient'
+import { ASSET_POLL_INTERVAL_MS, hasUnsettledAsset } from '@/lib/assetPolling'
 
 // Keyless, free vector basemap (CARTO) — no API key/billing account needed.
 const BASEMAP_STYLE_URL = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
@@ -71,6 +73,11 @@ type DrawMode = 'idle' | 'drawing'
 export interface ProjectMapRegion {
   /** Prefixed (`drawn:<id>` / `nz:<id>`) so drawn and NZ-region ids can never collide. */
   id: string
+  /** Real region.id in the DB — undefined only in the brief window between a
+   *  freshly-drawn/selected region firing pushRegionsUpdate() and its createRegion()
+   *  POST resolving. Needed anywhere a caller (e.g. training-run scope) must send the
+   *  actual persisted region id rather than this UI-only prefixed one. */
+  dbId?: string
   color: string
   /** Real region name for `kind: 'nz-region'`; absent for hand-drawn regions. */
   name?: string
@@ -86,12 +93,27 @@ export interface ProjectMapHandle {
   clearRegions: () => void
   /** Only meaningful for `drawn:<id>` regions — NZ regions keep their real name. */
   renameRegion: (id: string, name: string) => void
+  /** Arms a one-shot "click the map to place a point" mode — the next map click (that
+   *  doesn't land on an existing region/recorder/device feature) resolves `onPicked` with
+   *  that point's lat/lon and disarms itself. Used by the upload panel's device form so a
+   *  device's location can come from clicking the map instead of typing coordinates. */
+  startPickingLocation: (onPicked: (lat: number, lon: number) => void) => void
+  cancelPickingLocation: () => void
+  /** Refetches saved devices so a newly-created one appears on the map immediately. */
+  refreshDevices: () => void
 }
 
 interface ProjectMapProps {
   projectId: string
   onRegionsChange?: (regions: ProjectMapRegion[]) => void
   onDrawModeChange?: (drawing: boolean) => void
+  /** Fires when an existing saved device's marker is clicked — lets the upload panel
+   *  select that device the same way picking it from the dropdown would. */
+  onDeviceClick?: (device: Device) => void
+  /** Fires when the "no recordings yet" empty state's upload prompt is clicked — the map
+   *  page wires this to switching its sidebar into upload mode, rather than navigating
+   *  away (there's no longer a standalone /projects/upload page to link to). */
+  onUploadClick?: () => void
 }
 
 function assetsToGeoJSON(assets: Asset[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
@@ -125,6 +147,17 @@ function detectionsToGeoJSON(detections: Detection[]): GeoJSON.FeatureCollection
         // than low-confidence ones, rather than every detection counting equally.
         properties: { species: d.speciesCode, score: d.score },
       })),
+  }
+}
+
+function devicesToGeoJSON(devices: Device[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
+  return {
+    type: 'FeatureCollection',
+    features: devices.map((d) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [d.lon, d.lat] },
+      properties: { id: d.id, name: d.name },
+    })),
   }
 }
 
@@ -210,7 +243,7 @@ async function addRegionsOverlay(map: maplibregl.Map): Promise<GeoJSON.FeatureCo
 }
 
 const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function ProjectMap(
-  { projectId, onRegionsChange, onDrawModeChange },
+  { projectId, onRegionsChange, onDrawModeChange, onDeviceClick, onUploadClick },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -229,13 +262,26 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
   // persisted row's database id — every create/rename/delete against the API needs the
   // DB id, not terra-draw's own (ephemeral, in-memory-only) feature id.
   const regionDbIdsRef = useRef<Map<string, string>>(new Map())
+  // Holds the "next click resolves this" callback while a location pick is armed - a ref
+  // (not state) because the generic map click handler is registered once, in the same
+  // init effect as everything else above, and would otherwise close over a stale value.
+  const pickingLocationRef = useRef<((lat: number, lon: number) => void) | null>(null)
+  const onDeviceClickRef = useRef(onDeviceClick)
+  useEffect(() => { onDeviceClickRef.current = onDeviceClick }, [onDeviceClick])
+  // The device-point click handler below is only ever registered once (the first time
+  // the 'devices' source is created) - it must read devices through a ref, not the state
+  // closure, or it would only ever see whatever the device list was at that first render.
+  const devicesRef = useRef<Device[]>([])
 
   const [assets, setAssets] = useState<Asset[] | null>(null)
   const [detections, setDetections] = useState<Detection[] | null>(null)
+  const [devices, setDevices] = useState<Device[]>([])
+  useEffect(() => { devicesRef.current = devices }, [devices])
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('recorders')
   const [showRegions, setShowRegions] = useState(true)
   const [drawMode, setDrawMode] = useState<DrawMode>('idle')
+  const [isPickingLocation, setIsPickingLocation] = useState(false)
   const [mapReady, setMapReady] = useState(false)
   // User-given names for drawn regions, keyed by their prefixed `drawn:<id>` — terra-draw
   // owns the geometry, but naming is a purely UI-level concern layered on top rather than
@@ -255,29 +301,49 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
     onDrawModeChange?.(drawMode === 'drawing')
   }, [drawMode, onDrawModeChange])
 
-  // Fetch this project's recorder locations and species detections. Self-contained data
+  // Fetch this project's recorder locations and species detections, then keep polling for
+  // as long as anything is still pending/processing - a file uploaded and left to process
+  // needs its marker to update color (and the heatmap to gain its detections) on its own,
+  // not just once at whatever moment this component happened to mount. Self-contained data
   // fetching (rather than requiring a parent to pass props in) mirrors how the homepage's
   // AcousticMap owns its own data — drop <ProjectMap projectId="..."/> anywhere and it works.
   useEffect(() => {
     let cancelled = false
-    setError(null)
-    Promise.all([
-      listAssets(projectId, { limit: 1000 }),
-      listDetections(projectId, { limit: 5000 }),
-    ])
-      .then(([a, d]) => {
+    let timer: ReturnType<typeof setTimeout>
+
+    async function poll() {
+      try {
+        const [a, d] = await Promise.all([
+          listAssets(projectId, { limit: 1000 }),
+          listDetections(projectId, { limit: 5000 }),
+        ])
         if (cancelled) return
         setAssets(a)
         setDetections(d)
-      })
-      .catch((err) => {
+        setError(null)
+        if (hasUnsettledAsset(a)) timer = setTimeout(poll, ASSET_POLL_INTERVAL_MS)
+      } catch (err) {
         if (cancelled) return
         setError(err instanceof Error ? err.message : 'Failed to load map data')
-      })
+        // Keep retrying - a dropped request shouldn't permanently freeze the map's status.
+        timer = setTimeout(poll, ASSET_POLL_INTERVAL_MS)
+      }
+    }
+
+    poll()
     return () => {
       cancelled = true
+      clearTimeout(timer)
     }
   }, [projectId])
+
+  const loadDevices = useCallback(() => {
+    listDevices(projectId)
+      .then(setDevices)
+      .catch((err) => console.error('[ProjectMap] failed to load devices:', err))
+  }, [projectId])
+
+  useEffect(() => { loadDevices() }, [loadDevices])
 
   // Combines hand-drawn polygons and selected NZ regions into one list — the sidebar
   // treats both identically (same metrics computation, same list UI), matching drawn
@@ -292,6 +358,7 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
             const id = `drawn:${f.id}`
             return {
               id,
+              dbId: regionDbIdsRef.current.get(id),
               kind: 'drawn' as const,
               name: drawnRegionNamesRef.current[id],
               color: colorForRegionId(f.id as string | number),
@@ -303,13 +370,17 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
     const nzRegions: ProjectMapRegion[] = Array.from(selectedNZRegionIdsRef.current)
       .map((id) => regionsDataRef.current.get(id))
       .filter((f): f is GeoJSON.Feature => f !== undefined)
-      .map((f) => ({
-        id: `nz:${f.properties?.id}`,
-        kind: 'nz-region' as const,
-        name: f.properties?.name as string | undefined,
-        color: f.properties?.color as string,
-        feature: f as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>,
-      }))
+      .map((f) => {
+        const id = `nz:${f.properties?.id}`
+        return {
+          id,
+          dbId: regionDbIdsRef.current.get(id),
+          kind: 'nz-region' as const,
+          name: f.properties?.name as string | undefined,
+          color: f.properties?.color as string,
+          feature: f as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>,
+        }
+      })
 
     onRegionsChange?.([...nzRegions, ...drawnRegions])
   }, [onRegionsChange])
@@ -386,13 +457,31 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
         }
         pushRegionsUpdate()
       },
+      startPickingLocation: (onPicked) => {
+        pickingLocationRef.current = onPicked
+        setIsPickingLocation(true)
+        if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'crosshair'
+      },
+      cancelPickingLocation: () => {
+        pickingLocationRef.current = null
+        setIsPickingLocation(false)
+        if (mapRef.current) mapRef.current.getCanvas().style.cursor = ''
+      },
+      refreshDevices: loadDevices,
     }),
-    [pushRegionsUpdate, updateNZRegionSelectionPaint, projectId]
+    [pushRegionsUpdate, updateNZRegionSelectionPaint, projectId, loadDevices]
   )
 
-  // Map initialization — runs once per mount.
+  // Map initialization — runs once per mount. In dev, React Strict Mode runs this effect,
+  // its cleanup, then this effect again, all synchronously - `map.remove()` in cleanup
+  // normally pre-empts 'load' from ever firing on the discarded first instance, but a
+  // cached basemap style can resolve fast enough to race past that, letting a stale
+  // instance's hydration logic keep running after cleanup and double-add features (e.g.
+  // a drawn region appearing twice) - `cancelled` makes every step below a no-op once
+  // this particular effect run has been cleaned up, regardless of what triggered it.
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
+    let cancelled = false
 
     const map = new maplibregl.Map({
       container: containerRef.current,
@@ -404,7 +493,22 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
     map.on('error', (e) => console.error('[ProjectMap] maplibre error:', e.error))
 
+    // Generic click, registered once — armed/disarmed via startPickingLocation /
+    // cancelPickingLocation on the imperative handle. Deliberately not layer-specific (a
+    // location pick should resolve wherever the user clicks, including open water or
+    // anywhere with no feature underneath), unlike the region/recorder/device click
+    // handlers below, which all guard against firing while a pick is in progress instead.
+    map.on('click', (e) => {
+      const onPicked = pickingLocationRef.current
+      if (!onPicked || drawModeRef.current === 'drawing') return
+      pickingLocationRef.current = null
+      setIsPickingLocation(false)
+      map.getCanvas().style.cursor = ''
+      onPicked(e.lngLat.lat, e.lngLat.lng)
+    })
+
     map.on('load', async () => {
+      if (cancelled) return
       recolorBasemap(map)
 
       // User-drawn polygons for scoping model training/metrics to a region. Styled with
@@ -508,6 +612,7 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
       drawRef.current = draw
 
       const fc = await addRegionsOverlay(map)
+      if (cancelled) return
       if (fc) {
         for (const f of fc.features) {
           const id = f.properties?.id
@@ -516,8 +621,9 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
         map.on('click', 'nz-regions-fill', (e) => {
           // While actively drawing, clicks are placing polygon vertices — letting them
           // also toggle whatever NZ region happens to be underneath meant every vertex
-          // click doubled as a select/deselect.
-          if (drawModeRef.current === 'drawing') return
+          // click doubled as a select/deselect. Same reasoning for a location pick in
+          // progress - that click is placing a device, not selecting a region.
+          if (drawModeRef.current === 'drawing' || pickingLocationRef.current) return
           const id = e.features?.[0]?.properties?.id
           if (!id) return
           if (selectedNZRegionIdsRef.current.has(id)) {
@@ -535,6 +641,11 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
               name: (feature?.properties?.name as string) ?? 'NZ Region',
               color: (feature?.properties?.color as string) ?? TEAL,
               nzRegionRef: id,
+              // The API now requires geometry for nz_admin rows too (region-scoped
+              // training needs real point-in-polygon filtering server-side for both
+              // region kinds) - already loaded here from the static NZ-regions dataset,
+              // so this is wiring existing data through, not fetching anything new.
+              geometry: feature?.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon | undefined,
             })
               .then((created) => regionDbIdsRef.current.set(`nz:${id}`, created.id))
               .catch((err) => console.error('[ProjectMap] failed to persist region selection:', err))
@@ -554,6 +665,7 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
       // set since their geometry already lives in the static dataset fetched above.
       try {
         const persisted = await listRegions(projectId)
+        if (cancelled) return
         const persistedDrawn = persisted.filter((r) => r.kind === 'drawn' && r.geometry)
         if (persistedDrawn.length > 0) {
           draw.addFeatures(
@@ -591,12 +703,14 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
         console.error('[ProjectMap] failed to load saved regions:', err)
       }
 
+      if (cancelled) return
       setMapReady(true)
     })
 
     mapRef.current = map
 
     return () => {
+      cancelled = true
       drawRef.current?.stop()
       drawRef.current = null
       map.remove()
@@ -606,6 +720,7 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
   }, [])
 
   const handleMarkerClick = useCallback((e: maplibregl.MapMouseEvent & { features?: GeoJSON.Feature[] }) => {
+    if (pickingLocationRef.current) return
     const feature = e.features?.[0]
     const map = mapRef.current
     if (!feature || !map || feature.geometry.type !== 'Point') return
@@ -764,6 +879,57 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
     }
   }, [mapReady, assets, detections, handleMarkerClick])
 
+  // Saved devices — a small, visually distinct layer from recorder points (which mark
+  // individual uploaded files' locations; a device is reusable equipment, not a
+  // recording). Deliberately not clustered - the device count per project is expected to
+  // stay small (a handful of physical units), unlike potentially thousands of recordings.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    const deviceFC = devicesToGeoJSON(devices)
+
+    if (map.getSource('devices')) {
+      ;(map.getSource('devices') as maplibregl.GeoJSONSource).setData(deviceFC)
+      return
+    }
+    map.addSource('devices', { type: 'geojson', data: deviceFC })
+    map.addLayer({
+      id: 'device-point',
+      type: 'circle',
+      source: 'devices',
+      paint: {
+        'circle-radius': 6,
+        'circle-color': '#c3a6ff',
+        'circle-opacity': 0.95,
+        'circle-stroke-width': 2,
+        'circle-stroke-color': OCEAN_DARK,
+      },
+    })
+    map.on('click', 'device-point', (e) => {
+      if (pickingLocationRef.current) return
+      const feature = e.features?.[0]
+      if (!feature || feature.geometry.type !== 'Point') return
+      const id = feature.properties?.id as string | undefined
+      const device = devicesRef.current.find((d) => d.id === id)
+      const coords = feature.geometry.coordinates.slice() as [number, number]
+
+      popupRef.current?.remove()
+      const node = document.createElement('div')
+      node.innerHTML = `
+        <div style="font-family: var(--font-inter, sans-serif); min-width: 140px;">
+          <p style="font-weight: 600; margin: 0;">${feature.properties?.name ?? 'Device'}</p>
+        </div>
+      `
+      popupRef.current = new maplibregl.Popup({ closeButton: true, offset: 10 }).setLngLat(coords).setDOMContent(node).addTo(map)
+
+      if (device) onDeviceClickRef.current?.(device)
+    })
+    map.on('mouseenter', 'device-point', () => {
+      if (!pickingLocationRef.current) map.getCanvas().style.cursor = 'pointer'
+    })
+    map.on('mouseleave', 'device-point', () => { map.getCanvas().style.cursor = '' })
+  }, [mapReady, devices])
+
   // Toggle recorder-pin layers vs. heatmap layer visibility.
   useEffect(() => {
     const map = mapRef.current
@@ -855,6 +1021,22 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
             Click to place points, double-click to finish
           </span>
         )}
+
+        {isPickingLocation && (
+          <span className="flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium bg-[#c3a6ff]/20 border border-[#c3a6ff]/40 text-white">
+            Click the map to place this device
+            <button
+              onClick={() => {
+                pickingLocationRef.current = null
+                setIsPickingLocation(false)
+                if (mapRef.current) mapRef.current.getCanvas().style.cursor = ''
+              }}
+              className="text-white/70 hover:text-white"
+            >
+              ✕
+            </button>
+          </span>
+        )}
       </div>
 
       {(loading || error) && (
@@ -870,9 +1052,9 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
       {!loading && !error && assets.length === 0 && (
         <div className="absolute bottom-4 left-4 right-4 z-10 bg-ocean-dark/80 backdrop-blur-sm border border-white/10 rounded-lg px-4 py-3 text-sm text-gray-300">
           No recordings with a location yet.{' '}
-          <Link href={`/projects/upload?projectId=${encodeURIComponent(projectId)}`} className="text-brand-100 underline">
+          <button onClick={onUploadClick} className="text-brand-100 underline">
             Upload one
-          </Link>{' '}
+          </button>{' '}
           to see it appear here.
         </div>
       )}

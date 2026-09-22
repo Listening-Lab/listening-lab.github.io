@@ -38,14 +38,21 @@ export default function Navbar() {
 
         <div className="flex items-center gap-4">
           <Link
-            href="/demo"
+            href="/#about"
+            className="px-4 py-1.5 rounded-full text-sm transition-colors"
+            style={{ color: 'rgba(255,255,255,0.75)' }}
+          >
+            About
+          </Link>
+          <Link
+            href="/contact"
             className="px-4 py-1.5 rounded-full text-sm transition-colors"
             style={{
-              color: pathname === '/demo' ? TEAL : 'rgba(255,255,255,0.75)',
-              fontWeight: pathname === '/demo' ? 500 : undefined,
+              color: pathname === '/contact' ? TEAL : 'rgba(255,255,255,0.75)',
+              fontWeight: pathname === '/contact' ? 500 : undefined,
             }}
           >
-            Map
+            Contact
           </Link>
           {user ? (
             <>

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import RequireAuth from '@/lib/auth/RequireAuth'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { listProjects, createProject, type Project } from '@/lib/apiClient'
+import ProjectActionsMenu from '@/components/ProjectActionsMenu'
 
 function NewProjectForm({
   onCreated,
@@ -106,32 +107,7 @@ function ProjectRow({ project }: { project: Project }) {
         >
           Map
         </Link>
-        <Link
-          href={`/projects/files?projectId=${encodeURIComponent(project.id)}`}
-          className="bg-white/10 text-white border border-white/20 px-4 py-2 rounded-full text-sm font-medium hover:bg-white/20 transition-colors"
-        >
-          Files
-        </Link>
-        <Link
-          href={`/projects/labeling?projectId=${encodeURIComponent(project.id)}`}
-          className="bg-white/10 text-white border border-white/20 px-4 py-2 rounded-full text-sm font-medium hover:bg-white/20 transition-colors"
-        >
-          Label
-        </Link>
-        <Link
-          href={`/projects/upload?projectId=${encodeURIComponent(project.id)}`}
-          className="bg-white/10 text-white border border-white/20 px-4 py-2 rounded-full text-sm font-medium hover:bg-white/20 transition-colors"
-        >
-          Upload
-        </Link>
-        {project.role === 'admin' && (
-          <Link
-            href={`/projects/members?projectId=${encodeURIComponent(project.id)}`}
-            className="bg-white/10 text-white border border-white/20 px-4 py-2 rounded-full text-sm font-medium hover:bg-white/20 transition-colors"
-          >
-            Members
-          </Link>
-        )}
+        <ProjectActionsMenu project={project} />
       </div>
     </li>
   )

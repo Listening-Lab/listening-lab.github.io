@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import RequireAuth from '@/lib/auth/RequireAuth'
 import { listAssets, listFolders, type Asset } from '@/lib/apiClient'
+import { ASSET_POLL_INTERVAL_MS, hasUnsettledAsset } from '@/lib/assetPolling'
 import AssetStatusBadge from '@/components/AssetStatusBadge'
 
 function childFolders(folders: string[], current: string | null): string[] {
@@ -57,15 +58,32 @@ function FileBrowser() {
     return () => { cancelled = true }
   }, [projectId])
 
+  // Polls while anything's still pending/processing, so a file left to process updates
+  // its status badge on its own instead of needing a manual refresh - same reasoning and
+  // interval as the map page's Overview panel and marker colors (lib/assetPolling.ts).
   useEffect(() => {
     if (!projectId) return
     let cancelled = false
+    let timer: ReturnType<typeof setTimeout>
     setAssets(null)
     setError(null)
-    listAssets(projectId, { folder: folder ?? undefined })
-      .then((data) => { if (!cancelled) setAssets(data) })
-      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load files') })
-    return () => { cancelled = true }
+
+    async function poll() {
+      try {
+        const data = await listAssets(projectId as string, { folder: folder ?? undefined })
+        if (cancelled) return
+        setAssets(data)
+        setError(null)
+        if (hasUnsettledAsset(data)) timer = setTimeout(poll, ASSET_POLL_INTERVAL_MS)
+      } catch (err) {
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : 'Failed to load files')
+        timer = setTimeout(poll, ASSET_POLL_INTERVAL_MS)
+      }
+    }
+
+    poll()
+    return () => { cancelled = true; clearTimeout(timer) }
   }, [projectId, folder])
 
   const crumbs = useMemo(() => {
@@ -185,7 +203,7 @@ function FilesPageContent() {
           <h1 className="font-serif text-4xl text-white">Files</h1>
           {projectId && (
             <Link
-              href={`/projects/upload?projectId=${encodeURIComponent(projectId)}`}
+              href={`/projects/map?projectId=${encodeURIComponent(projectId)}&panel=upload`}
               className="shrink-0 bg-white/10 text-white border border-white/20 px-5 py-2.5 rounded-full text-sm font-medium hover:bg-white/20 transition-colors"
             >
               Upload

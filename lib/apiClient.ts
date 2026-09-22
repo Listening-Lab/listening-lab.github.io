@@ -172,8 +172,17 @@ export interface CompleteUploadPayload {
   fileKey: string
   lat: number
   lon: number
-  /** ISO 8601 recording timestamp, entered manually at MVP stage. */
+  /** ISO 8601 recording timestamp — auto-filled from the filename when recognized,
+   *  editable either way. */
   recordedAt: string
+  /** Virtual folder path (e.g. "Site A/2026-summer") — derived from the source directory
+   *  structure when uploading a folder, editable. */
+  folder?: string
+  /** Which saved device this came from, if one was selected — provenance only, doesn't
+   *  affect lat/lon/recordedAt (those are still sent explicitly above). */
+  deviceId?: string
+  /** A trained custom model to also run against this file, alongside Perch. */
+  modelVersionId?: string
 }
 
 export interface CompleteUploadResponse {
@@ -197,6 +206,7 @@ export interface Job {
   id: string
   status: JobStatus
   error?: string
+  assetId?: string
 }
 
 export function getJob(jobId: string): Promise<Job> {
@@ -212,6 +222,8 @@ export interface Asset {
   lon: number | null
   recordedAt: string | null
   durationSeconds: number | null
+  /** Which saved device (if any) this recording came from — provenance only. */
+  deviceId: string | null
   createdAt: string
   latestJobId: string | null
   latestJobStatus: JobStatus | null
@@ -286,15 +298,32 @@ export interface Detection {
 
 export function listDetections(
   projectId: string,
-  options: { assetId?: string; species?: string; minScore?: number; limit?: number } = {}
+  options: {
+    assetId?: string
+    species?: string
+    minScore?: number
+    limit?: number
+    /** Restrict to one preview set — e.g. 'perch_v2' (global top-5), 'perch_v2_nz'
+     *  (NZ-restricted top-5, see nzModelVersion below), or a custom model's
+     *  'custom:{name}:v{n}' tag. Omit for every model_version mixed together. */
+    modelVersion?: string
+  } = {}
 ): Promise<Detection[]> {
   const params = new URLSearchParams()
   if (options.assetId !== undefined) params.set('asset_id', options.assetId)
   if (options.species !== undefined) params.set('species', options.species)
   if (options.minScore !== undefined) params.set('min_score', String(options.minScore))
   if (options.limit !== undefined) params.set('limit', String(options.limit))
+  if (options.modelVersion !== undefined) params.set('model_version', options.modelVersion)
   const qs = params.toString()
   return apiFetch<Detection[]>(`/v1/projects/${projectId}/detections${qs ? `?${qs}` : ''}`)
+}
+
+/** The NZ-restricted top-5 preview's model_version tag (worker.py computes this
+ *  alongside the unfiltered top-5, restricted to the ~127-species NZ Aves whitelist) —
+ *  the default prediction view across the app, per lib/speciesNames.ts's whitelist. */
+export function nzModelVersion(modelVersion = 'perch_v2'): string {
+  return `${modelVersion}_nz`
 }
 
 export type LabelValue = 'present' | 'absent' | 'uncertain'
@@ -335,6 +364,35 @@ export function createLabel(projectId: string, payload: CreateLabelPayload): Pro
     method: 'POST',
     body: payload,
   })
+}
+
+export interface SpeciesReadiness {
+  speciesCode: string
+  positiveCount: number
+  negativeCount: number
+  sufficient: boolean
+}
+
+export interface LabelingReadiness {
+  hasAnyLabels: boolean
+  minLabelCount: number
+  species: SpeciesReadiness[]
+}
+
+// Rule 1 (any labels at all) + Rule 2 (flat per-species positive/negative minimum) from
+// the training plan (Manager/log/2026-09-20-regions-and-training-plan.md §2.4). A
+// species below `minLabelCount` isn't excluded from training later, just untrusted until
+// it clears the bar — the labeling UI uses `sufficient: false` to prioritize that
+// species, not to hide it. Pass `regionIds` to scope the check to a specific training
+// scope (e.g. before starting a run) rather than the whole project.
+export function getLabelingReadiness(
+  projectId: string,
+  options: { regionIds?: string[] } = {}
+): Promise<LabelingReadiness> {
+  const params = new URLSearchParams()
+  if (options.regionIds && options.regionIds.length > 0) params.set('region_ids', options.regionIds.join(','))
+  const qs = params.toString()
+  return apiFetch<LabelingReadiness>(`/v1/projects/${projectId}/labeling/readiness${qs ? `?${qs}` : ''}`)
 }
 
 // Same list for every project on a given model_version - it's the model's fixed class
@@ -437,18 +495,189 @@ export function deleteRegion(projectId: string, regionId: string): Promise<void>
   })
 }
 
+/** A saved recording device — name, fixed location, and (optionally) which filename
+ *  convention its recordings use — reselectable on a later upload instead of retyping
+ *  lat/lon. Per-project, like regions and models. */
+export interface Device {
+  id: string
+  name: string
+  lat: number
+  lon: number
+  /** e.g. 'audiomoth', 'audiomoth_hex', 'iso_datetime' — see lib/filenameParsing.ts.
+   *  Null means no known convention; recording time is filled in manually. */
+  filenameFormat: string | null
+  createdAt: string
+}
+
+export function listDevices(projectId: string): Promise<Device[]> {
+  return apiFetch<Device[]>(`/v1/projects/${projectId}/devices`)
+}
+
+export interface CreateDevicePayload {
+  name: string
+  lat: number
+  lon: number
+  filenameFormat?: string | null
+}
+
+export function createDevice(projectId: string, payload: CreateDevicePayload): Promise<Device> {
+  return apiFetch<Device>(`/v1/projects/${projectId}/devices`, {
+    method: 'POST',
+    body: payload,
+  })
+}
+
+export interface UpdateDevicePayload {
+  name?: string
+  lat?: number
+  lon?: number
+  filenameFormat?: string | null
+}
+
+export function updateDevice(
+  projectId: string,
+  deviceId: string,
+  patch: UpdateDevicePayload
+): Promise<Device> {
+  return apiFetch<Device>(`/v1/projects/${projectId}/devices/${deviceId}`, {
+    method: 'PATCH',
+    body: patch,
+  })
+}
+
+export function deleteDevice(projectId: string, deviceId: string): Promise<void> {
+  return apiFetch<void>(`/v1/projects/${projectId}/devices/${deviceId}`, {
+    method: 'DELETE',
+  })
+}
+
+export type TrainingRunStatus = 'pending' | 'running' | 'complete' | 'failed'
+
+export interface SpeciesCoverage {
+  positiveCount: number
+  negativeCount: number
+  sufficient: boolean
+}
+
+export interface TrainingRun {
+  id: string
+  projectId: string
+  modelId: string | null
+  speciesCodes: string[]
+  status: TrainingRunStatus
+  hyperparameters: Record<string, unknown>
+  labelCoverage: Record<string, SpeciesCoverage> | null
+  error: string | null
+  createdAt: string
+  completedAt: string | null
+}
+
+export interface CreateTrainingRunPayload {
+  /** Omit to create a brand-new model; when set, speciesCodes/regionIds must match that
+   *  model's existing scope exactly. */
+  modelId?: string
+  name?: string
+  speciesCodes?: string[]
+  regionIds: string[]
+  hyperparameters?: Record<string, unknown>
+}
+
+export function createTrainingRun(projectId: string, payload: CreateTrainingRunPayload): Promise<TrainingRun> {
+  return apiFetch<TrainingRun>(`/v1/projects/${projectId}/training-runs`, {
+    method: 'POST',
+    body: payload,
+  })
+}
+
+export function getTrainingRun(projectId: string, trainingRunId: string): Promise<TrainingRun> {
+  return apiFetch<TrainingRun>(`/v1/projects/${projectId}/training-runs/${trainingRunId}`)
+}
+
+/** Re-enqueues a fresh attempt with the same scope/species/model target — only valid for
+ *  a run whose status is 'failed'. The failed run itself is left in place. */
+export function retryTrainingRun(projectId: string, trainingRunId: string): Promise<TrainingRun> {
+  return apiFetch<TrainingRun>(`/v1/projects/${projectId}/training-runs/${trainingRunId}/retry`, {
+    method: 'POST',
+  })
+}
+
+/** Also deletes the model_version it produced, if any. Rejected (409) while the run is
+ *  actively 'running'. */
+export function deleteTrainingRun(projectId: string, trainingRunId: string): Promise<void> {
+  return apiFetch<void>(`/v1/projects/${projectId}/training-runs/${trainingRunId}`, {
+    method: 'DELETE',
+  })
+}
+
+export function listTrainingRuns(
+  projectId: string,
+  options: { modelId?: string; limit?: number } = {}
+): Promise<TrainingRun[]> {
+  const params = new URLSearchParams()
+  if (options.modelId !== undefined) params.set('model_id', options.modelId)
+  if (options.limit !== undefined) params.set('limit', String(options.limit))
+  const qs = params.toString()
+  return apiFetch<TrainingRun[]>(`/v1/projects/${projectId}/training-runs${qs ? `?${qs}` : ''}`)
+}
+
+export interface Model {
+  id: string
+  name: string
+  speciesCodes: string[]
+  regionIds: string[]
+  createdAt: string
+  latestVersionNumber: number | null
+  /** The model_version id to pass as `modelVersionId` when uploading, so the upload page
+   *  never needs a separate listModelVersions round trip just to offer this model as a
+   *  choice. Null until this model has at least one completed version. */
+  latestVersionId: string | null
+}
+
+export function listModels(projectId: string): Promise<Model[]> {
+  return apiFetch<Model[]>(`/v1/projects/${projectId}/models`)
+}
+
+export interface SpeciesMetrics {
+  precision: number | null
+  recall: number | null
+  insufficientData: boolean
+}
+
+export interface ModelVersion {
+  id: string
+  modelId: string
+  versionNumber: number
+  trainingRunId: string
+  weightsUri: string
+  metrics: Record<string, SpeciesMetrics>
+  createdAt: string
+}
+
+export function listModelVersions(projectId: string, modelId: string): Promise<ModelVersion[]> {
+  return apiFetch<ModelVersion[]>(`/v1/projects/${projectId}/models/${modelId}/versions`)
+}
+
+/** Cascades to every version and training run this model has. Rejected (409) while a
+ *  training run for it is currently 'running'. */
+export function deleteModel(projectId: string, modelId: string): Promise<void> {
+  return apiFetch<void>(`/v1/projects/${projectId}/models/${modelId}`, {
+    method: 'DELETE',
+  })
+}
+
 /**
- * Full upload flow per the brief: request a signed URL, upload direct to storage, then
- * notify the API so it can create the processing job. Returns the new job id to poll.
+ * Full upload flow: request a signed URL, upload direct to storage, then notify the API
+ * so it can create the processing job. Returns the new job id to poll. One file per call
+ * — the upload page calls this once per staged row for a multi-file/folder batch.
  */
 export async function uploadRecording(
   projectId: string,
   file: File,
-  location: { lat: number; lon: number; recordedAt: string }
+  metadata: Omit<CompleteUploadPayload, 'fileKey'>
 ): Promise<string> {
   const { uploadUrl, fileKey } = await requestUploadUrl(projectId, file.name, file.type)
   await uploadFileToStorage(uploadUrl, file)
-  const { jobId } = await completeUpload(projectId, { fileKey, ...location })
+  const { jobId } = await completeUpload(projectId, { fileKey, ...metadata })
   return jobId
 }
 

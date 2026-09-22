@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useSpeciesNames } from '@/lib/speciesNames'
 
 export interface SpeciesSuggestion {
   code: string
@@ -26,14 +27,19 @@ export default function SpeciesMultiSelect({
 }) {
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
+  const { commonName } = useSpeciesNames()
 
   const suggestionCodes = useMemo(() => new Set(suggestions.map((s) => s.code)), [suggestions])
 
   const searchResults = useMemo(() => {
     if (query.trim().length < 2) return []
     const q = query.toLowerCase()
-    return allSpecies.filter((s) => s.toLowerCase().includes(q) && !suggestionCodes.has(s)).slice(0, 8)
-  }, [query, allSpecies, suggestionCodes])
+    // Most people know a bird by its English name, not its scientific binomial - match
+    // both so "tui" finds "Prosthemadera novaeseelandiae" just as well as the Latin would.
+    return allSpecies
+      .filter((s) => !suggestionCodes.has(s) && (s.toLowerCase().includes(q) || commonName(s).toLowerCase().includes(q)))
+      .slice(0, 8)
+  }, [query, allSpecies, suggestionCodes, commonName])
 
   // Species the user selected via search (not among the original suggestions) still
   // need to show as a pill afterward, or a confirmed selection would silently disappear
@@ -45,7 +51,22 @@ export default function SpeciesMultiSelect({
 
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5 mb-2">
+      {(suggestions.length > 0 || extraSelected.length > 0) && (
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] text-gray-500">{selected.size} selected</span>
+          {selected.size > 0 && (
+            <button
+              onClick={() => Array.from(selected).forEach(onToggle)}
+              className="text-[11px] text-gray-500 hover:text-white underline"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+      {/* Capped + scrollable, not letting the pill count push the rest of the form
+          (and the submit button) off-screen — "select all" can add 100+ at once. */}
+      <div className="flex flex-wrap gap-1.5 mb-2 max-h-40 overflow-y-auto p-1 -m-1 hide-scrollbar">
         {suggestions.map((s) => (
           <button
             key={s.code}
@@ -55,18 +76,19 @@ export default function SpeciesMultiSelect({
                 ? 'bg-brand-500 border-brand-500 text-white'
                 : 'bg-white/5 border-white/15 text-gray-300 hover:border-white/30'
             }`}
-            title={`Perch score ${s.score.toFixed(2)}`}
+            title={`${commonName(s.code)} · Perch score ${s.score.toFixed(2)}`}
           >
-            {s.code}
+            {commonName(s.code)}
           </button>
         ))}
         {extraSelected.map((code) => (
           <button
             key={code}
             onClick={() => onToggle(code)}
+            title={commonName(code)}
             className="px-2.5 py-1 rounded-full text-xs font-medium border bg-brand-500 border-brand-500 text-white"
           >
-            {code}
+            {commonName(code)}
           </button>
         ))}
       </div>
@@ -92,7 +114,8 @@ export default function SpeciesMultiSelect({
                     onClick={() => { onToggle(code); setQuery('') }}
                     className="w-full text-left px-3 py-1.5 text-xs text-gray-200 hover:bg-white/10"
                   >
-                    {code}
+                    {commonName(code)}
+                    {commonName(code) !== code && <span className="text-gray-500 italic ml-1.5">{code}</span>}
                   </button>
                 </li>
               ))
