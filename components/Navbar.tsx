@@ -66,6 +66,16 @@ export default function Navbar() {
               >
                 Projects
               </Link>
+              <Link
+                href="/account"
+                className="px-4 py-1.5 rounded-full text-sm transition-colors"
+                style={{
+                  color: pathname === '/account' ? TEAL : 'rgba(255,255,255,0.75)',
+                  fontWeight: pathname === '/account' ? 500 : undefined,
+                }}
+              >
+                Account
+              </Link>
               <button
                 onClick={() => { signOut(); router.push('/') }}
                 className="px-4 py-1.5 rounded-full text-sm font-medium border border-white/20 bg-white/5 hover:bg-white/10 transition-colors text-white"

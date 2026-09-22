@@ -266,6 +266,14 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
   // (not state) because the generic map click handler is registered once, in the same
   // init effect as everything else above, and would otherwise close over a stale value.
   const pickingLocationRef = useRef<((lat: number, lon: number) => void) | null>(null)
+  // Snapshot of "was a drawn region selected right before this click" — captured in the
+  // earliest-registered map click handler (before terra-draw's own click handling can
+  // deselect it), and read by the nz-regions-fill click handler below to tell "clicking
+  // away to deselect a drawn region" apart from "clicking an NZ region to toggle it".
+  // Without this, clicking away from a selected drawn region (which sits on land, i.e.
+  // almost always over an NZ region too) would deselect the drawn region *and* toggle
+  // whatever NZ region happened to be underneath the click.
+  const hadSelectedDrawnFeatureRef = useRef(false)
   const onDeviceClickRef = useRef(onDeviceClick)
   useEffect(() => { onDeviceClickRef.current = onDeviceClick }, [onDeviceClick])
   // The device-point click handler below is only ever registered once (the first time
@@ -493,12 +501,20 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
     map.on('error', (e) => console.error('[ProjectMap] maplibre error:', e.error))
 
-    // Generic click, registered once — armed/disarmed via startPickingLocation /
-    // cancelPickingLocation on the imperative handle. Deliberately not layer-specific (a
-    // location pick should resolve wherever the user clicks, including open water or
-    // anywhere with no feature underneath), unlike the region/recorder/device click
-    // handlers below, which all guard against firing while a pick is in progress instead.
+    // Generic click, registered once, before terra-draw attaches its own click listener
+    // (in draw.start(), below) and before the nz-regions-fill click handler (added later
+    // still, in addRegionsOverlay) — so this runs first on every click, letting it
+    // snapshot terra-draw's selection state *before* terra-draw's own click handling can
+    // change it. See hadSelectedDrawnFeatureRef below for why that ordering matters.
     map.on('click', (e) => {
+      hadSelectedDrawnFeatureRef.current =
+        drawRef.current?.getSnapshot().some((f) => f.properties?.selected === true) ?? false
+
+      // Location-picking: armed/disarmed via startPickingLocation / cancelPickingLocation
+      // on the imperative handle. Deliberately not layer-specific (a location pick should
+      // resolve wherever the user clicks, including open water or anywhere with no
+      // feature underneath), unlike the region/recorder/device click handlers below,
+      // which all guard against firing while a pick is in progress instead.
       const onPicked = pickingLocationRef.current
       if (!onPicked || drawModeRef.current === 'drawing') return
       pickingLocationRef.current = null
@@ -570,7 +586,10 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
           color: colorForRegionId(id),
           geometry: feature.geometry as GeoJSON.Polygon,
         })
-          .then((created) => regionDbIdsRef.current.set(prefixedId, created.id))
+          .then((created) => {
+            regionDbIdsRef.current.set(prefixedId, created.id)
+            pushRegionsUpdate()
+          })
           .catch((err) => console.error('[ProjectMap] failed to persist new region:', err))
         pushRegionsUpdate()
       })
@@ -624,6 +643,21 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
           // click doubled as a select/deselect. Same reasoning for a location pick in
           // progress - that click is placing a device, not selecting a region.
           if (drawModeRef.current === 'drawing' || pickingLocationRef.current) return
+          // A click that's dismissing a currently-selected drawn region (terra-draw
+          // deselects on any click away from the selected feature) shouldn't also toggle
+          // whatever NZ region happens to be underneath — see hadSelectedDrawnFeatureRef.
+          if (hadSelectedDrawnFeatureRef.current) return
+          // MapLibre invokes every layer-scoped click handler whose layer is hit at this
+          // point, in registration order — it does NOT stop at the topmost rendered layer
+          // the way DOM click handling would. A device marker or a hand-drawn region
+          // (terra-draw's own 'td-*' layers, added after this one) rendered visually on
+          // top of an NZ region would otherwise also toggle that region underneath on
+          // every click. Bail here and let the device/drawn-region's own handler own the
+          // click instead.
+          const shadowingLayers = ['device-point', 'td-polygon', 'td-point'].filter((id) => map.getLayer(id))
+          if (shadowingLayers.length > 0 && map.queryRenderedFeatures(e.point, { layers: shadowingLayers }).length > 0) {
+            return
+          }
           const id = e.features?.[0]?.properties?.id
           if (!id) return
           if (selectedNZRegionIdsRef.current.has(id)) {
@@ -647,7 +681,13 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
               // so this is wiring existing data through, not fetching anything new.
               geometry: feature?.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon | undefined,
             })
-              .then((created) => regionDbIdsRef.current.set(`nz:${id}`, created.id))
+              .then((created) => {
+                regionDbIdsRef.current.set(`nz:${id}`, created.id)
+                // Without this, the sidebar/training panel's "still saving…" state (keyed
+                // off dbId being set) never clears — pushRegionsUpdate below runs
+                // synchronously, before this promise resolves.
+                pushRegionsUpdate()
+              })
               .catch((err) => console.error('[ProjectMap] failed to persist region selection:', err))
           }
           updateNZRegionSelectionPaint()
@@ -905,12 +945,24 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
         'circle-stroke-color': OCEAN_DARK,
       },
     })
+    // Click opens the device straight into management (edit/delete) or selects it for the
+    // upload form (via onDeviceClickRef, see map/page.tsx's handleDeviceClick) — no popup
+    // here, since a click-triggered popup with its own close button was just an extra
+    // thing to dismiss on top of whatever the click already opened. The name preview is
+    // hover-only instead (below), and disappears on its own.
     map.on('click', 'device-point', (e) => {
       if (pickingLocationRef.current) return
       const feature = e.features?.[0]
       if (!feature || feature.geometry.type !== 'Point') return
       const id = feature.properties?.id as string | undefined
       const device = devicesRef.current.find((d) => d.id === id)
+      if (device) onDeviceClickRef.current?.(device)
+    })
+    map.on('mouseenter', 'device-point', (e) => {
+      if (pickingLocationRef.current) return
+      map.getCanvas().style.cursor = 'pointer'
+      const feature = e.features?.[0]
+      if (!feature || feature.geometry.type !== 'Point') return
       const coords = feature.geometry.coordinates.slice() as [number, number]
 
       popupRef.current?.remove()
@@ -920,14 +972,16 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
           <p style="font-weight: 600; margin: 0;">${feature.properties?.name ?? 'Device'}</p>
         </div>
       `
-      popupRef.current = new maplibregl.Popup({ closeButton: true, offset: 10 }).setLngLat(coords).setDOMContent(node).addTo(map)
-
-      if (device) onDeviceClickRef.current?.(device)
+      popupRef.current = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 10 })
+        .setLngLat(coords)
+        .setDOMContent(node)
+        .addTo(map)
     })
-    map.on('mouseenter', 'device-point', () => {
-      if (!pickingLocationRef.current) map.getCanvas().style.cursor = 'pointer'
+    map.on('mouseleave', 'device-point', () => {
+      map.getCanvas().style.cursor = ''
+      popupRef.current?.remove()
+      popupRef.current = null
     })
-    map.on('mouseleave', 'device-point', () => { map.getCanvas().style.cursor = '' })
   }, [mapReady, devices])
 
   // Toggle recorder-pin layers vs. heatmap layer visibility.

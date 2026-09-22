@@ -7,6 +7,7 @@ import RequireAuth from '@/lib/auth/RequireAuth'
 import ProjectMap, { type ProjectMapHandle, type ProjectMapRegion } from '@/components/ProjectMap'
 import ProjectMapSidebar from '@/components/ProjectMapSidebar'
 import MapUploadPanel, { type MapUploadPanelHandle } from '@/components/MapUploadPanel'
+import DeviceManager from '@/components/DeviceManager'
 import type { Device } from '@/lib/apiClient'
 
 type SidebarMode = 'overview' | 'upload'
@@ -19,6 +20,9 @@ function MapPageContent() {
   const uploadPanelRef = useRef<MapUploadPanelHandle>(null)
   const [regions, setRegions] = useState<ProjectMapRegion[]>([])
   const [isDrawing, setIsDrawing] = useState(false)
+  // A device marker clicked outside the upload flow opens straight to its edit/delete
+  // form via a headless DeviceManager instance (below) rather than duplicating that UI.
+  const [managingDeviceId, setManagingDeviceId] = useState<string | null>(null)
   // Deep-linkable ("?panel=upload") so the other pages that used to link to the
   // standalone /projects/upload page can land straight in upload mode here instead.
   const [mode, setMode] = useState<SidebarMode>(searchParams.get('panel') === 'upload' ? 'upload' : 'overview')
@@ -37,7 +41,11 @@ function MapPageContent() {
   }
 
   function handleDeviceClick(device: Device) {
-    if (mode === 'upload') uploadPanelRef.current?.selectDevice(device)
+    if (mode === 'upload') {
+      uploadPanelRef.current?.selectDevice(device)
+    } else {
+      setManagingDeviceId(device.id)
+    }
   }
 
   return (
@@ -94,6 +102,16 @@ function MapPageContent() {
           )}
         </div>
       </div>
+
+      <DeviceManager
+        hideSelect
+        projectId={projectId}
+        selectedDeviceId={null}
+        onSelect={() => {}}
+        openDeviceId={managingDeviceId}
+        onOpenHandled={() => setManagingDeviceId(null)}
+        onDevicesChanged={() => mapRef.current?.refreshDevices()}
+      />
     </div>
   )
 }

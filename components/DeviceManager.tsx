@@ -51,6 +51,9 @@ export default function DeviceManager({
   onSelect,
   onRequestMapPick,
   onDevicesChanged,
+  hideSelect,
+  openDeviceId,
+  onOpenHandled,
 }: {
   projectId: string
   selectedDeviceId: string | null
@@ -61,6 +64,16 @@ export default function DeviceManager({
   onRequestMapPick?: (onPicked: (lat: number, lon: number) => void) => void
   /** Fires after any create/update/delete — e.g. so the map's device markers refresh. */
   onDevicesChanged?: () => void
+  /** Renders only the list/form/delete modals, not the picker `<select>` — for a second,
+   *  always-mounted instance that the map page opens directly via `openDeviceId` (clicking
+   *  a device marker outside the upload flow), rather than duplicating this edit/delete UI. */
+  hideSelect?: boolean
+  /** Jumps straight to a given device's edit form once its data is loaded, then calls
+   *  onOpenHandled so the caller can clear the request (a one-shot trigger, not
+   *  controlled state — further edits/navigation within the modal are this component's
+   *  own, same as if reached via "Manage devices…"). */
+  openDeviceId?: string | null
+  onOpenHandled?: () => void
 }) {
   const [devices, setDevices] = useState<Device[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -86,6 +99,16 @@ export default function DeviceManager({
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load devices') })
     return () => { cancelled = true }
   }, [projectId])
+
+  useEffect(() => {
+    if (!openDeviceId || !devices) return
+    const device = devices.find((d) => d.id === openDeviceId)
+    if (device) openEditForm(device)
+    onOpenHandled?.()
+    // openEditForm is a stable function declaration, not a dependency that changes
+    // per-render — including it would refire this on every keystroke in the form it opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openDeviceId, devices])
 
   function resetForm() {
     setName('')
@@ -189,22 +212,26 @@ export default function DeviceManager({
 
   return (
     <div>
-      <select
-        value={selectedDeviceId ?? ''}
-        onChange={handleSelectChange}
-        style={{ colorScheme: 'dark' }}
-        className="w-full bg-white/5 border border-white/15 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-      >
-        <option value="" style={{ backgroundColor: '#0a1628', color: 'white' }}>No device — enter location manually</option>
-        {(devices ?? []).map((d) => (
-          <option key={d.id} value={d.id} style={{ backgroundColor: '#0a1628', color: 'white' }}>{d.name}</option>
-        ))}
-        <option value="__add__" style={{ backgroundColor: '#0a1628', color: 'white' }}>+ Add a new device…</option>
-        {devices && devices.length > 0 && (
-          <option value="__manage__" style={{ backgroundColor: '#0a1628', color: 'white' }}>⚙ Manage devices…</option>
-        )}
-      </select>
-      {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
+      {!hideSelect && (
+        <>
+          <select
+            value={selectedDeviceId ?? ''}
+            onChange={handleSelectChange}
+            style={{ colorScheme: 'dark' }}
+            className="w-full bg-white/5 border border-white/15 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            <option value="" style={{ backgroundColor: '#0a1628', color: 'white' }}>No device — enter location manually</option>
+            {(devices ?? []).map((d) => (
+              <option key={d.id} value={d.id} style={{ backgroundColor: '#0a1628', color: 'white' }}>{d.name}</option>
+            ))}
+            <option value="__add__" style={{ backgroundColor: '#0a1628', color: 'white' }}>+ Add a new device…</option>
+            {devices && devices.length > 0 && (
+              <option value="__manage__" style={{ backgroundColor: '#0a1628', color: 'white' }}>⚙ Manage devices…</option>
+            )}
+          </select>
+          {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
+        </>
+      )}
 
       {view === 'list' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

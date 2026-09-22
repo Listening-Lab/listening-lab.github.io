@@ -1497,7 +1497,7 @@ export default function AcousticMapDemo() {
     loadingPhoto: boolean;
   } | null>(null);
   const speciesPhotoCache = useRef<
-    Map<string, { photoUrl: string; photoAttribution: string }>
+    Map<string, { photoUrl: string; thumbUrl: string; photoAttribution: string }>
   >(new Map());
 
   useEffect(() => {
@@ -1627,6 +1627,14 @@ export default function AcousticMapDemo() {
         wikiData?.thumbnail?.source ||
         inatData?.default_photo?.medium_url ||
         "";
+      // A dedicated small image for the pointer badge's 48px thumbnail — Wikipedia's
+      // originalimage (used below for the full-size info panel) can be several MB; no
+      // reason to pull that just to paint a tiny corner thumbnail. Falls back to `photo`
+      // only if neither source offers a real small variant.
+      const thumbPhoto =
+        wikiData?.thumbnail?.source ||
+        inatData?.default_photo?.square_url ||
+        photo;
       const photoAttribution = wikiData?.originalimage?.source
         ? "Wikimedia Commons"
         : inatData?.default_photo?.attribution || "iNaturalist";
@@ -1708,11 +1716,13 @@ export default function AcousticMapDemo() {
       if (photo) {
         speciesPhotoCache.current.set(`${rec.genus}_${rec.species}`, {
           photoUrl: photo,
+          thumbUrl: thumbPhoto,
           photoAttribution,
         });
       }
 
-      // Update pointer badge with resolved photo and details
+      // Update pointer badge with resolved photo and details — the small badge
+      // thumbnail uses thumbPhoto, not the full-size photo (see thumbPhoto above).
       setPointerBadge((prev) => {
         if (!prev) return null;
         if (prev.recId === rec.id) {
@@ -1720,7 +1730,7 @@ export default function AcousticMapDemo() {
             ...prev,
             commonName: common,
             scientificName: scientific,
-            photoUrl: photo || prev.photoUrl,
+            photoUrl: thumbPhoto || prev.photoUrl,
             loadingPhoto: false,
           };
         }
@@ -1776,7 +1786,7 @@ export default function AcousticMapDemo() {
             recId: rec.id,
             commonName: rec.englishName || `${rec.genus} ${rec.species}`,
             scientificName: `${rec.genus} ${rec.species}`,
-            photoUrl: cached?.photoUrl,
+            photoUrl: cached?.thumbUrl,
             loadingPhoto: !cached,
           });
         },
@@ -1831,9 +1841,9 @@ export default function AcousticMapDemo() {
       {/* Header */}
       <div className="relative z-10 pt-20 pb-6 text-center px-4 flex justify-center pointer-events-none">
         <div className="max-w-3xl w-full pointer-events-auto">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#4ecdc4]/10 border border-[#4ecdc4]/20 text-[#4ecdc4] text-xs uppercase tracking-widest font-semibold mb-3">
+          {/* <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#4ecdc4]/10 border border-[#4ecdc4]/20 text-[#4ecdc4] text-xs uppercase tracking-widest font-semibold mb-3">
             <span>✨ Interactive Species Demo</span>
-          </div>
+          </div> */}
           <h1 className="font-serif text-4xl md:text-5xl mb-3">
             Sound Map of Aotearoa
           </h1>
@@ -1852,7 +1862,7 @@ export default function AcousticMapDemo() {
               "Drag to orbit the 3D embedding space. Click any point to select species."
             )}
           </p>
-          <div className="mt-4 flex items-center justify-center gap-3">
+          {/* <div className="mt-4 flex items-center justify-center gap-3">
             <button
               onClick={() => setIsUploadModalOpen(true)}
               className="bg-[#4ecdc4]/20 hover:bg-[#4ecdc4]/35 backdrop-blur-md border border-[#4ecdc4]/60 rounded-full px-5 py-2 text-xs font-semibold text-white transition-all shadow-lg shadow-[#4ecdc4]/20 flex items-center gap-2 cursor-pointer"
@@ -1873,7 +1883,7 @@ export default function AcousticMapDemo() {
               </svg>
               <span>Upload Audio &amp; Classify</span>
             </button>
-          </div>
+          </div> */}
         </div>
       </div>
 
@@ -2028,14 +2038,23 @@ export default function AcousticMapDemo() {
                   <img
                     src={pointerBadge.photoUrl}
                     alt={pointerBadge.commonName}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover object-center"
                   />
                 ) : pointerBadge.loadingPhoto ? (
-                  <div className="w-full h-full flex items-center justify-center bg-white/10 animate-pulse text-lg">
-                    🐦
+                  <div className="w-full h-full flex items-center justify-center bg-white/10">
+                    <svg className="animate-spin h-4 w-4 text-[#4ecdc4]" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
                   </div>
                 ) : (
-                  <span className="text-xl">🐦</span>
+                  <svg className="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="M21 15l-5-5L5 21" />
+                  </svg>
                 )}
               </div>
 

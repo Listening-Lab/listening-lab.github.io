@@ -66,6 +66,18 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
   return response.json() as Promise<T>
 }
 
+export interface Me {
+  id: string
+  email: string
+  createdAt: string
+}
+
+/** The signed-in user's own account record. Also the trigger for auto-provisioning
+ *  (see API get_app_user_id) if this is their very first authenticated call. */
+export function getMe(): Promise<Me> {
+  return apiFetch<Me>('/v1/me')
+}
+
 export type ProjectRole = 'admin' | 'member'
 
 export interface Project {

@@ -38,14 +38,37 @@ export default function TrainModelPanel({ projectId, regions, onClose }: TrainMo
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [trainingRunId, setTrainingRunId] = useState<string | null>(null)
+  // Lets a region be left out of this training run without removing it from the map —
+  // e.g. scoping to just an NZ region when a drawn region is also currently on the map.
+  // Keyed by the UI-prefixed region.id (stable even while a region's dbId is still
+  // pending) rather than being computed from `regions`, so a checkbox stays unchecked
+  // across re-renders instead of resetting to "everything included" every time.
+  const [excludedRegionIds, setExcludedRegionIds] = useState<Set<string>>(new Set())
 
-  const regionIds = useMemo(() => regions.map((r) => r.dbId).filter((id): id is string => !!id), [regions])
+  const includedRegions = useMemo(
+    () => regions.filter((r) => !excludedRegionIds.has(r.id)),
+    [regions, excludedRegionIds]
+  )
+  const regionIds = useMemo(
+    () => includedRegions.map((r) => r.dbId).filter((id): id is string => !!id),
+    [includedRegions]
+  )
   const regionIdsKey = regionIds.join(',')
+
+  function toggleRegionIncluded(id: string) {
+    setExcludedRegionIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   // Defaults the name to the current map scope (e.g. "Canterbury", or "Otago, Southland"
   // for a multi-region selection) so the common case needs no typing — stops tracking
   // scope changes the moment the user edits the field themselves.
-  const suggestedName = regions.length === 0 ? 'Whole Project' : regions.map((r) => r.name ?? 'Region').join(', ')
+  const suggestedName =
+    includedRegions.length === 0 ? 'Whole Project' : includedRegions.map((r) => r.name ?? 'Region').join(', ')
   useEffect(() => {
     if (!nameTouched) setName(suggestedName)
   }, [suggestedName, nameTouched])
@@ -78,7 +101,7 @@ export default function TrainModelPanel({ projectId, regions, onClose }: TrainMo
     })
   }
 
-  const pendingRegions = regions.filter((r) => !r.dbId)
+  const pendingRegions = includedRegions.filter((r) => !r.dbId)
 
   async function submit() {
     setSubmitting(true)
@@ -194,15 +217,33 @@ export default function TrainModelPanel({ projectId, regions, onClose }: TrainMo
               {regions.length === 0 ? (
                 <p className="text-sm text-gray-400">Whole project (no regions selected on the map).</p>
               ) : (
-                <ul className="space-y-1">
-                  {regions.map((r) => (
-                    <li key={r.id} className="text-sm text-gray-300 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: r.color }} />
-                      {r.name ?? 'Region'}
-                      {!r.dbId && <span className="text-xs text-gray-500">(still saving…)</span>}
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <ul className="space-y-1">
+                    {regions.map((r) => {
+                      const included = !excludedRegionIds.has(r.id)
+                      return (
+                        <li key={r.id} className="text-sm flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={included}
+                            onChange={() => toggleRegionIncluded(r.id)}
+                            className="accent-brand-500"
+                          />
+                          <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: r.color }} />
+                          <span className={included ? 'text-gray-300' : 'text-gray-500 line-through'}>
+                            {r.name ?? 'Region'}
+                          </span>
+                          {included && !r.dbId && <span className="text-xs text-gray-500">(still saving…)</span>}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  {regions.length > 1 && (
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      Uncheck a region to leave it out of this run without removing it from the map.
+                    </p>
+                  )}
+                </>
               )}
             </div>
 

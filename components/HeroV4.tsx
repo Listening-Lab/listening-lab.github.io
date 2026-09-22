@@ -1,16 +1,15 @@
-'use client'
-import dynamic from 'next/dynamic'
-import { motion } from 'framer-motion'
-import Image from 'next/image'
-import Link from 'next/link'
+"use client";
+import dynamic from "next/dynamic";
+import { motion } from "framer-motion";
+import Image from "next/image";
+import Link from "next/link";
 
-const RegionMap = dynamic(() => import('@/components/Map'), { ssr: false })
+const RegionMap = dynamic(() => import("@/components/Map"), { ssr: false });
 
 // ── Waveform bar heights ──────────────────────────────────────────────────────
 const WAVEFORM_HEIGHTS = Array.from({ length: 28 }, (_, i) =>
-  Math.max(3, Math.round(4 + Math.sin(i * 0.7) * 9 + Math.sin(i * 0.28) * 5))
-)
-
+  Math.max(3, Math.round(4 + Math.sin(i * 0.7) * 9 + Math.sin(i * 0.28) * 5)),
+);
 
 export default function HeroV4() {
   return (
@@ -34,49 +33,59 @@ export default function HeroV4() {
         className="absolute inset-0"
         style={{
           background:
-            'linear-gradient(to right, #0a1628 28%, rgba(10,22,40,0.82) 44%, rgba(10,22,40,0.45) 62%, rgba(10,22,40,0.1) 80%, transparent 100%)',
+            "linear-gradient(to right, #0a1628 28%, rgba(10,22,40,0.82) 44%, rgba(10,22,40,0.45) 62%, rgba(10,22,40,0.1) 80%, transparent 100%)",
         }}
       />
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            'radial-gradient(ellipse 80% 60% at 70% 50%, rgba(3,105,161,0.18) 0%, transparent 70%)',
+            "radial-gradient(ellipse 80% 60% at 70% 50%, rgba(3,105,161,0.18) 0%, transparent 70%)",
         }}
       />
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: 'linear-gradient(to bottom, rgba(10,22,40,0.85) 0%, rgba(10,22,40,0.6) 12%, transparent 28%)',
+          background:
+            "linear-gradient(to bottom, rgba(10,22,40,0.85) 0%, rgba(10,22,40,0.6) 12%, transparent 28%)",
         }}
       />
       <div
         className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
-        style={{ background: 'linear-gradient(to bottom, transparent, #0a1628)' }}
+        style={{
+          background: "linear-gradient(to bottom, transparent, #0a1628)",
+        }}
       />
 
       {/* ── Right: zoomed NZ map ── */}
       <div className="absolute right-0 top-0 w-full h-full pointer-events-none">
-        <RegionMap selectedRegion="Manawatu-Wanganui" className="opacity-75" panX={-0.5} zoomWidthFraction={0.62}/>
+        <RegionMap
+          selectedRegion="Manawatu-Wanganui"
+          className="opacity-75"
+          panX={-0.5}
+          zoomWidthFraction={0.62}
+        />
       </div>
 
       {/* ── Left: text content (same as V3) ── */}
       <div className="relative z-20 w-full md:w-[60%] px-8 sm:px-12 md:pl-48 md:pr-8 py-28 md:pb-12 md:pt-0 mt-0 md:-mt-0 flex flex-col">
-
         {/* Waveform accent strip */}
         <motion.div
           initial={{ opacity: 0, scaleX: 0 }}
           animate={{ opacity: 1, scaleX: 1 }}
-          transition={{ duration: 0.9, delay: 0.1, ease: 'easeOut' }}
+          transition={{ duration: 0.9, delay: 0.1, ease: "easeOut" }}
           className="mb-8 origin-left"
         >
           <svg viewBox="0 0 196 28" className="w-36 h-5 opacity-50">
             {WAVEFORM_HEIGHTS.map((h, i) => (
               <rect
                 key={i}
-                x={i * 7} y={(28 - h) / 2}
-                width="4" height={h}
-                fill="#4ecdc4" rx="1.5"
+                x={i * 7}
+                y={(28 - h) / 2}
+                width="4"
+                height={h}
+                fill="#4ecdc4"
+                rx="1.5"
               />
             ))}
           </svg>
@@ -97,7 +106,8 @@ export default function HeroV4() {
           transition={{ duration: 0.65, delay: 0.12 }}
           className="font-serif text-5xl md:text-[3.2rem] lg:text-6xl leading-tight mb-6"
         >
-          Sound is how we<br /> Understand Nature.
+          Sound is how we
+          <br /> Understand Nature.
         </motion.h1>
 
         <motion.div
@@ -132,12 +142,22 @@ export default function HeroV4() {
           href="#acoustic-map"
           className="flex items-center gap-3 bg-white/5 backdrop-blur-md text-white border border-white/20 px-6 py-2.5 rounded-full font-medium hover:bg-white/20 transition-colors shadow-2xl text-sm whitespace-nowrap"
         >
-          Explore the Bioacoustic Map of Aotearoa
-          <svg className="w-4 h-4 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          Explore the Sound Map
+          <svg
+            className="w-4 h-4 animate-bounce"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 14l-7 7m0 0l-7-7m7 7V3"
+            />
           </svg>
         </Link>
       </motion.div>
     </section>
-  )
+  );
 }
