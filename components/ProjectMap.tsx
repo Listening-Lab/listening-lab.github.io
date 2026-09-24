@@ -116,11 +116,22 @@ interface ProjectMapProps {
   onUploadClick?: () => void
 }
 
+// Guards against one bad coordinate (e.g. a manually-entered lat/lon typo'd or swapped)
+// crashing the whole map: maplibregl.LngLat throws for a lat/lon outside its valid range,
+// and fitToFeatures' bounds.extend() has no per-point try/catch, so a single invalid
+// point used to take down every marker on the page, not just its own.
+function isValidLngLat(lon: number, lat: number): boolean {
+  return Number.isFinite(lon) && Number.isFinite(lat) && lon >= -180 && lon <= 180 && lat >= -90 && lat <= 90
+}
+
 function assetsToGeoJSON(assets: Asset[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
   return {
     type: 'FeatureCollection',
     features: assets
-      .filter((a): a is Asset & { lat: number; lon: number } => a.lat !== null && a.lon !== null)
+      .filter(
+        (a): a is Asset & { lat: number; lon: number } =>
+          a.lat !== null && a.lon !== null && isValidLngLat(a.lon, a.lat)
+      )
       .map((a) => ({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
@@ -139,7 +150,10 @@ function detectionsToGeoJSON(detections: Detection[]): GeoJSON.FeatureCollection
   return {
     type: 'FeatureCollection',
     features: detections
-      .filter((d): d is Detection & { lat: number; lon: number } => d.lat !== null && d.lon !== null)
+      .filter(
+        (d): d is Detection & { lat: number; lon: number } =>
+          d.lat !== null && d.lon !== null && isValidLngLat(d.lon, d.lat)
+      )
       .map((d) => ({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [d.lon, d.lat] },
@@ -153,7 +167,7 @@ function detectionsToGeoJSON(detections: Detection[]): GeoJSON.FeatureCollection
 function devicesToGeoJSON(devices: Device[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
   return {
     type: 'FeatureCollection',
-    features: devices.map((d) => ({
+    features: devices.filter((d) => isValidLngLat(d.lon, d.lat)).map((d) => ({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [d.lon, d.lat] },
       properties: { id: d.id, name: d.name },
