@@ -27,7 +27,10 @@ export default function ProjectActionsMenu({ project }: { project: Project }) {
     { label: 'Models', href: `/projects/models?projectId=${encodeURIComponent(project.id)}` },
     { label: 'Upload', href: `/projects/map?projectId=${encodeURIComponent(project.id)}&panel=upload` },
     ...(project.role === 'admin'
-      ? [{ label: 'Members', href: `/projects/members?projectId=${encodeURIComponent(project.id)}` }]
+      ? [
+          { label: 'Members', href: `/projects/members?projectId=${encodeURIComponent(project.id)}` },
+          { label: 'Settings', href: `/projects/settings?projectId=${encodeURIComponent(project.id)}` },
+        ]
       : []),
   ]
 

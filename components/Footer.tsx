@@ -13,6 +13,7 @@ export default function Footer() {
           <Link href="/demo" className="hover:text-white transition-colors">Map</Link>
           <Link href="/contact" className="hover:text-white transition-colors">Contact</Link>
           <Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link>
+          <Link href="/terms" className="hover:text-white transition-colors">Terms</Link>
         </nav>
       </div>
     </footer>

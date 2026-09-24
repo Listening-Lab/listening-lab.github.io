@@ -105,6 +105,28 @@ export function createProject(payload: CreateProjectPayload): Promise<Project> {
   })
 }
 
+export interface UpdateProjectPayload {
+  name?: string
+  description?: string
+}
+
+/** Rename a project or change its description. Requires admin. */
+export function updateProject(projectId: string, patch: UpdateProjectPayload): Promise<Project> {
+  return apiFetch<Project>(`/v1/projects/${projectId}`, {
+    method: 'PATCH',
+    body: patch,
+  })
+}
+
+/** Deletes the project and everything scoped to it (assets, models, training runs,
+ *  regions, devices) — irreversible. Requires admin. The Public project can't be deleted
+ *  (the API itself refuses this, not enforced here). */
+export function deleteProject(projectId: string): Promise<void> {
+  return apiFetch<void>(`/v1/projects/${projectId}`, {
+    method: 'DELETE',
+  })
+}
+
 export interface Member {
   userId: string
   email: string
@@ -649,6 +671,10 @@ export function listModels(projectId: string): Promise<Model[]> {
   return apiFetch<Model[]>(`/v1/projects/${projectId}/models`)
 }
 
+export function getModel(projectId: string, modelId: string): Promise<Model> {
+  return apiFetch<Model>(`/v1/projects/${projectId}/models/${modelId}`)
+}
+
 export interface SpeciesMetrics {
   precision: number | null
   recall: number | null
@@ -691,6 +717,120 @@ export async function uploadRecording(
   await uploadFileToStorage(uploadUrl, file)
   const { jobId } = await completeUpload(projectId, { fileKey, ...metadata })
   return jobId
+}
+
+export interface ApiKey {
+  id: string
+  name: string
+  /** First few characters only — the full value is shown exactly once, at creation. */
+  keyPrefix: string
+  /** If true, this key can view/label but never upload, train, delete, or manage members. */
+  readOnly: boolean
+  /** Projects this key is restricted to. Empty means unrestricted — every project the
+   *  account can access, including ones created after the key. Immutable after creation. */
+  projectIds: string[]
+  rateLimitPerMinute: number | null
+  spendLimitCents: number | null
+  lastUsedAt: string | null
+  expiresAt: string | null
+  /** Set once this key has been revoked; a revoked key is rejected on every request from
+   *  then on. */
+  revokedAt: string | null
+  createdAt: string
+}
+
+/** Your own API keys' metadata — never the raw key values again after creation. Requires
+ *  a Firebase session; not usable with another API key. */
+export function listApiKeys(): Promise<ApiKey[]> {
+  return apiFetch<ApiKey[]>('/v1/api-keys')
+}
+
+export interface CreateApiKeyPayload {
+  name: string
+  readOnly?: boolean
+  projectIds?: string[]
+  rateLimitPerMinute?: number
+  spendLimitCents?: number
+  expiresAt?: string
+}
+
+export interface CreateApiKeyResponse {
+  apiKey: ApiKey
+  /** The full key — shown exactly once, in this response. Cannot be retrieved again. */
+  rawKey: string
+}
+
+/** Mints a new API key. Requires an active subscription. */
+export function createApiKey(payload: CreateApiKeyPayload): Promise<CreateApiKeyResponse> {
+  return apiFetch<CreateApiKeyResponse>('/v1/api-keys', {
+    method: 'POST',
+    body: payload,
+  })
+}
+
+export interface UpdateApiKeyPayload {
+  name?: string
+  readOnly?: boolean
+  rateLimitPerMinute?: number
+  spendLimitCents?: number
+  expiresAt?: string
+}
+
+/** Project restrictions can't be changed here — revoke and create a new key instead. */
+export function updateApiKey(keyId: string, patch: UpdateApiKeyPayload): Promise<ApiKey> {
+  return apiFetch<ApiKey>(`/v1/api-keys/${keyId}`, {
+    method: 'PATCH',
+    body: patch,
+  })
+}
+
+/** Revokes a key (soft delete — its history is kept, just rejected on every future
+ *  request). Irreversible from the caller's side. */
+export function revokeApiKey(keyId: string): Promise<void> {
+  return apiFetch<void>(`/v1/api-keys/${keyId}`, {
+    method: 'DELETE',
+  })
+}
+
+export interface UsageKindTotal {
+  /** 'gcs_write_ops' (uploads) | 'gcs_read_ops' (download URLs issued) |
+   *  'inference_seconds' (automated-analysis compute) | 'training_seconds' (model
+   *  training compute). Each maps to a real GCP billing unit. */
+  kind: string
+  /** Total in the kind's own native unit (ops, or seconds), across all history. */
+  quantity: number
+  /** Our own price for that quantity, in cents — separate from GCP's actual cost. */
+  costCents: number
+}
+
+export interface ProjectUsageSummary {
+  projectId: string
+  /** Computed live from storage at the moment this is called — always current, not a
+   *  cached/periodic figure. */
+  currentStorageGib: number
+  currentStorageCostCentsEstimate: number
+  /** Everything except storage — see currentStorageGib for that. */
+  events: UsageKindTotal[]
+}
+
+/** On-demand usage/cost summary for one project — safe to call whenever someone actually
+ *  looks at it (e.g. an account/usage view), not meant for polling. */
+export function getProjectUsage(projectId: string): Promise<ProjectUsageSummary> {
+  return apiFetch<ProjectUsageSummary>(`/v1/projects/${projectId}/usage`)
+}
+
+export interface DeletedProjectUsage {
+  /** The project's name at the time it was deleted — the id itself is gone, so this is
+   *  the only identifying label left. */
+  projectName: string
+  events: UsageKindTotal[]
+}
+
+/** Historical usage for projects that no longer exist, grouped by name — deleting a
+ *  project doesn't erase what it already cost. Scoped to your own past actions only (the
+ *  API can no longer check who administered a project once it's gone). */
+export function listDeletedProjectUsage(): Promise<DeletedProjectUsage[]> {
+  return apiFetch<DeletedProjectUsage[]>('/v1/usage/deleted-projects')
 }
 
 export { apiFetch }
