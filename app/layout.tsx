@@ -5,6 +5,7 @@ import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import BackToTop from '@/components/BackToTop'
 import GoogleAnalytics from '@/components/GoogleAnalytics'
+import MaintenanceBanner from '@/components/MaintenanceBanner'
 import { AuthProvider } from '@/lib/auth/AuthProvider'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <main className="flex-1">{children}</main>
           <Footer />
           <BackToTop />
+          <MaintenanceBanner />
         </AuthProvider>
       </body>
     </html>

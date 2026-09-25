@@ -8,5 +8,5 @@ import type { Asset } from '@/lib/apiClient'
 export const ASSET_POLL_INTERVAL_MS = 5000
 
 export function hasUnsettledAsset(assets: Asset[]): boolean {
-  return assets.some((a) => a.latestJobStatus === 'pending' || a.latestJobStatus === 'processing' || a.latestJobStatus === null)
+  return assets.some((a) => a.latestJobStatus === 'pending' || a.latestJobStatus === 'processing')
 }

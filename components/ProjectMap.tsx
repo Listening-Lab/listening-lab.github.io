@@ -14,6 +14,10 @@ import {
   updateRegion,
   deleteRegion,
   listDevices,
+  listSites,
+  listDeployments,
+  type Site,
+  type Deployment,
   type Asset,
   type Detection,
   type Region as ApiRegion,
@@ -101,12 +105,31 @@ export interface ProjectMapHandle {
   cancelPickingLocation: () => void
   /** Refetches saved devices so a newly-created one appears on the map immediately. */
   refreshDevices: () => void
+  /** Same polygon-drawing tool as regions, but the finished shape is handed to `onSiteDrawn`
+   *  (to be named and saved as a site) instead of being saved as a training region. */
+  startDrawingSite: () => void
+  /** Refetches sites (and deployments, which can join a site) so changes are redrawn. */
+  refreshSites: () => void
+  /** Loads a site's outline into the drawing tool so its corners can be dragged. */
+  editSiteArea: (site: Site) => void
+  /** The outline as currently edited, or null if no site is being edited. */
+  getSiteEditGeometry: () => GeoJSON.Polygon | null
+  /** Stops editing (discarding unsaved changes) and shows the saved outline again. */
+  endSiteEdit: () => void
 }
 
 interface ProjectMapProps {
   projectId: string
   onRegionsChange?: (regions: ProjectMapRegion[]) => void
   onDrawModeChange?: (drawing: boolean) => void
+  /** Fires once the map and its drawing tool are ready to use. */
+  onReady?: () => void
+  /** Fires when a site's outline is clicked. */
+  onSiteClick?: (site: Site) => void
+  /** Fires with the project's sites whenever they (re)load. */
+  onSitesChange?: (sites: Site[]) => void
+  /** Fires once when a polygon started via startDrawingSite() is finished. */
+  onSiteDrawn?: (geometry: GeoJSON.Polygon) => void
   /** Fires when an existing saved device's marker is clicked — lets the upload panel
    *  select that device the same way picking it from the dropdown would. */
   onDeviceClick?: (device: Device) => void
@@ -167,9 +190,9 @@ function detectionsToGeoJSON(detections: Detection[]): GeoJSON.FeatureCollection
 function devicesToGeoJSON(devices: Device[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
   return {
     type: 'FeatureCollection',
-    features: devices.filter((d) => isValidLngLat(d.lon, d.lat)).map((d) => ({
+    features: devices.filter((d) => d.lat != null && d.lon != null && isValidLngLat(d.lon, d.lat)).map((d) => ({
       type: 'Feature',
-      geometry: { type: 'Point', coordinates: [d.lon, d.lat] },
+      geometry: { type: 'Point', coordinates: [d.lon as number, d.lat as number] },
       properties: { id: d.id, name: d.name },
     })),
   }
@@ -253,11 +276,20 @@ async function addRegionsOverlay(map: maplibregl.Map): Promise<GeoJSON.FeatureCo
     source: 'nz-regions',
     paint: { 'line-color': ['get', 'color'], 'line-opacity': REGION_OUTLINE_OPACITY, 'line-width': 1.5 },
   })
+  // A faint white coastline/boundary that stays on when the coloured regions are hidden - the
+  // dark basemap alone leaves land and sea nearly indistinguishable, which makes placing
+  // sites and devices by eye hard.
+  map.addLayer({
+    id: 'nz-land-outline',
+    type: 'line',
+    source: 'nz-regions',
+    paint: { 'line-color': '#ffffff', 'line-opacity': 0.28, 'line-width': 1 },
+  })
   return colored
 }
 
 const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function ProjectMap(
-  { projectId, onRegionsChange, onDrawModeChange, onDeviceClick, onUploadClick },
+  { projectId, onRegionsChange, onDrawModeChange, onReady, onSiteClick, onSitesChange, onSiteDrawn, onDeviceClick, onUploadClick },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -294,17 +326,41 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
   // the 'devices' source is created) - it must read devices through a ref, not the state
   // closure, or it would only ever see whatever the device list was at that first render.
   const devicesRef = useRef<Device[]>([])
+  const deploymentsRef = useRef<Deployment[]>([])
 
   const [assets, setAssets] = useState<Asset[] | null>(null)
   const [detections, setDetections] = useState<Detection[] | null>(null)
   const [devices, setDevices] = useState<Device[]>([])
+  const [deployments, setDeployments] = useState<Deployment[]>([])
   useEffect(() => { devicesRef.current = devices }, [devices])
+  useEffect(() => { deploymentsRef.current = deployments }, [deployments])
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('recorders')
   const [showRegions, setShowRegions] = useState(true)
   const [drawMode, setDrawMode] = useState<DrawMode>('idle')
   const [isPickingLocation, setIsPickingLocation] = useState(false)
   const [mapReady, setMapReady] = useState(false)
+  // Sites: named areas drawn by the user, shown as an outline + label. Drawn with the same
+  // terra-draw polygon tool as regions; `drawTargetRef` says where the next finished polygon goes.
+  const [sites, setSites] = useState<Site[]>([])
+  const drawTargetRef = useRef<'region' | 'site'>('region')
+  const [editingSiteId, setEditingSiteId] = useState<string | null>(null)
+  const editingSiteRef = useRef<{ siteId: string; featureId: string } | null>(null)
+  const sitesRef = useRef<Site[]>([])
+  const onSiteClickRef = useRef(onSiteClick)
+  useEffect(() => { onSiteClickRef.current = onSiteClick }, [onSiteClick])
+  const siteMarkersRef = useRef<maplibregl.Marker[]>([])
+  const onSitesChangeRef = useRef(onSitesChange)
+  const onSiteDrawnRef = useRef(onSiteDrawn)
+  const onReadyRef = useRef(onReady)
+  useEffect(() => {
+    onSitesChangeRef.current = onSitesChange
+    onSiteDrawnRef.current = onSiteDrawn
+    onReadyRef.current = onReady
+  }, [onSitesChange, onSiteDrawn, onReady])
+  useEffect(() => {
+    if (mapReady) onReadyRef.current?.()
+  }, [mapReady])
   // User-given names for drawn regions, keyed by their prefixed `drawn:<id>` — terra-draw
   // owns the geometry, but naming is a purely UI-level concern layered on top rather than
   // stored in the feature's own properties (avoids reaching into terra-draw's internal
@@ -367,6 +423,155 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
 
   useEffect(() => { loadDevices() }, [loadDevices])
 
+  const loadSites = useCallback(() => {
+    listSites(projectId)
+      .then((s) => {
+        setSites(s)
+        onSitesChangeRef.current?.(s)
+      })
+      .catch((err) => console.error('[ProjectMap] failed to load sites:', err))
+  }, [projectId])
+
+  useEffect(() => { loadSites() }, [loadSites])
+
+  const loadDeployments = useCallback(() => {
+    listDeployments(projectId)
+      .then(setDeployments)
+      .catch((err) => console.error('[ProjectMap] failed to load deployments:', err))
+  }, [projectId])
+
+  useEffect(() => { loadDeployments() }, [loadDeployments])
+
+  // Deployments that aren't already shown as an active device's marker: ended/retrieved ones and
+  // device-less survey visits, coloured by status. Click one for its details.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    const shown = deployments.filter((d) => d.status !== 'active' || !d.deviceId)
+    const data: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: shown.map((d) => ({
+        type: 'Feature',
+        properties: { id: d.id, status: d.status },
+        geometry: { type: 'Point', coordinates: [d.lon, d.lat] },
+      })),
+    }
+    const existing = map.getSource('deployments') as maplibregl.GeoJSONSource | undefined
+    if (existing) {
+      existing.setData(data)
+      return
+    }
+    const before = map.getLayer('td-polygon') ? 'td-polygon' : undefined
+    map.addSource('deployments', { type: 'geojson', data })
+    map.addLayer(
+      {
+        id: 'deployment-point',
+        type: 'circle',
+        source: 'deployments',
+        paint: {
+          'circle-radius': 5,
+          'circle-color': ['match', ['get', 'status'], 'ended', '#9ca3af', 'retrieved', '#38bdf8', '#4ade80'],
+          'circle-opacity': 0.95,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': OCEAN_DARK,
+        },
+      },
+      before
+    )
+    map.on('mouseenter', 'deployment-point', () => {
+      if (drawModeRef.current !== 'drawing') map.getCanvas().style.cursor = 'pointer'
+    })
+    map.on('mouseleave', 'deployment-point', () => {
+      if (drawModeRef.current !== 'drawing') map.getCanvas().style.cursor = ''
+    })
+    map.on('click', 'deployment-point', (e) => {
+      if (drawModeRef.current === 'drawing' || pickingLocationRef.current) return
+      const f = e.features?.[0]
+      if (!f || f.geometry.type !== 'Point') return
+      const dep = deploymentsRef.current.find((d) => d.id === f.properties?.id)
+      if (!dep) return
+      const device = devicesRef.current.find((d) => d.id === dep.deviceId)
+      const el = document.createElement('div')
+      el.style.cssText = 'font-size:12px;color:#0a1628;line-height:1.4'
+      const title = document.createElement('strong')
+      title.textContent = `${device?.name ?? 'Manual survey'} · ${dep.status}`
+      const dates = document.createElement('div')
+      const fmt = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+      dates.textContent = `${fmt(dep.deploymentStart)} → ${dep.deploymentEnd ? fmt(dep.deploymentEnd) : 'ongoing'}`
+      el.append(title, dates)
+      new maplibregl.Popup({ closeButton: true, offset: 8 })
+        .setLngLat(f.geometry.coordinates as [number, number])
+        .setDOMContent(el)
+        .addTo(map)
+    })
+  }, [deployments, mapReady])
+
+  // Draws the sites' outlines and name labels. Layers go under terra-draw's own so a polygon
+  // being drawn/edited always renders on top.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    sitesRef.current = sites
+    const areas = sites.filter((site) => site.geometry.type !== 'Point' && site.id !== editingSiteId)
+    const data: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: areas.map((site) => ({
+        type: 'Feature',
+        properties: { id: site.id, name: site.name },
+        geometry: site.geometry as unknown as GeoJSON.Geometry,
+      })),
+    }
+    const existing = map.getSource('sites') as maplibregl.GeoJSONSource | undefined
+    if (existing) {
+      existing.setData(data)
+    } else {
+      const before = map.getLayer('td-polygon') ? 'td-polygon' : undefined
+      map.addSource('sites', { type: 'geojson', data })
+      map.addLayer({ id: 'sites-fill', type: 'fill', source: 'sites', paint: { 'fill-color': '#f4c95d', 'fill-opacity': 0.08 } }, before)
+      map.addLayer({ id: 'sites-line', type: 'line', source: 'sites', paint: { 'line-color': '#f4c95d', 'line-opacity': 0.85, 'line-width': 2, 'line-dasharray': [3, 2] } }, before)
+      map.on('mouseenter', 'sites-fill', () => {
+        if (drawModeRef.current !== 'drawing') map.getCanvas().style.cursor = 'pointer'
+      })
+      map.on('mouseleave', 'sites-fill', () => {
+        if (drawModeRef.current !== 'drawing') map.getCanvas().style.cursor = ''
+      })
+      map.on('click', 'sites-fill', (e) => {
+        if (drawModeRef.current === 'drawing' || pickingLocationRef.current || editingSiteRef.current) return
+        // A device/deployment marker on top of a site owns the click.
+        const markerLayers = ['device-point', 'deployment-point', 'td-point'].filter((id) => map.getLayer(id))
+        if (markerLayers.length > 0 && map.queryRenderedFeatures(e.point, { layers: markerLayers }).length > 0) return
+        const site = sitesRef.current.find((s) => s.id === e.features?.[0]?.properties?.id)
+        if (site) onSiteClickRef.current?.(site)
+      })
+    }
+
+    siteMarkersRef.current.forEach((m) => m.remove())
+    siteMarkersRef.current = sites.filter((site) => site.id !== editingSiteId).map((site) => {
+      let lngLat: [number, number] | null = null
+      if (site.geometry.type === 'Point') {
+        const c = site.geometry.coordinates as number[]
+        lngLat = [c[0], c[1]]
+      } else {
+        const b = new maplibregl.LngLatBounds()
+        const ring = (site.geometry.type === 'Polygon'
+          ? (site.geometry.coordinates as number[][][])[0]
+          : (site.geometry.coordinates as number[][][][])[0][0])
+        for (const [lon, lat] of ring) b.extend([lon, lat])
+        const center = b.getCenter()
+        lngLat = [center.lng, center.lat]
+      }
+      const el = document.createElement('div')
+      el.textContent = site.name
+      el.style.cssText =
+        'color:#f4c95d;font-size:11px;font-weight:600;letter-spacing:.02em;text-shadow:0 0 4px #0a1628,0 0 4px #0a1628;pointer-events:none;white-space:nowrap'
+      return new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(lngLat).addTo(map)
+    })
+    return () => {
+      siteMarkersRef.current.forEach((m) => m.remove())
+      siteMarkersRef.current = []
+    }
+  }, [sites, mapReady, editingSiteId])
+
   // Combines hand-drawn polygons and selected NZ regions into one list — the sidebar
   // treats both identically (same metrics computation, same list UI), matching drawn
   // regions and admin regions as equivalent "regions" rather than two separate concepts.
@@ -376,6 +581,8 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
       ? draw
           .getSnapshot()
           .filter((f) => f.geometry.type === 'Polygon' && f.id !== undefined)
+          .filter((f) => String(f.id) !== editingSiteRef.current?.featureId)
+          .filter((f) => !(drawTargetRef.current === 'site' && !regionDbIdsRef.current.has(`drawn:${f.id}`)))
           .map((f) => {
             const id = `drawn:${f.id}`
             return {
@@ -431,8 +638,43 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
         setDrawMode('drawing')
       },
       cancelDrawingRegion: () => {
+        drawTargetRef.current = 'region'
         drawRef.current?.setMode('select')
         setDrawMode('idle')
+      },
+      startDrawingSite: () => {
+        drawTargetRef.current = 'site'
+        drawRef.current?.setMode('polygon')
+        setDrawMode('drawing')
+      },
+      refreshSites: () => {
+        loadSites()
+        loadDeployments()
+      },
+      editSiteArea: (site) => {
+        const draw = drawRef.current
+        if (!draw || site.geometry.type !== 'Polygon') return
+        if (editingSiteRef.current) draw.removeFeatures([editingSiteRef.current.featureId])
+        draw.addFeatures([{ type: 'Feature', properties: { mode: 'polygon' }, geometry: site.geometry as unknown as GeoJSON.Polygon }])
+        const added = draw.getSnapshot().filter((f) => f.geometry.type === 'Polygon').slice(-1)[0]
+        if (!added || added.id === undefined) return
+        editingSiteRef.current = { siteId: site.id, featureId: String(added.id) }
+        setEditingSiteId(site.id)
+        draw.setMode('select')
+        draw.selectFeature(added.id)
+        pushRegionsUpdate()
+      },
+      getSiteEditGeometry: () => {
+        const editing = editingSiteRef.current
+        const feature = editing ? drawRef.current?.getSnapshotFeature(editing.featureId) : undefined
+        return feature && feature.geometry.type === 'Polygon' ? (feature.geometry as GeoJSON.Polygon) : null
+      },
+      endSiteEdit: () => {
+        const editing = editingSiteRef.current
+        editingSiteRef.current = null
+        if (editing) drawRef.current?.removeFeatures([editing.featureId])
+        setEditingSiteId(null)
+        pushRegionsUpdate()
       },
       removeRegion: (id) => {
         if (id.startsWith('nz:')) {
@@ -491,7 +733,7 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
       },
       refreshDevices: loadDevices,
     }),
-    [pushRegionsUpdate, updateNZRegionSelectionPaint, projectId, loadDevices]
+    [pushRegionsUpdate, updateNZRegionSelectionPaint, projectId, loadDevices, loadSites, loadDeployments]
   )
 
   // Map initialization — runs once per mount. In dev, React Strict Mode runs this effect,
@@ -584,9 +826,32 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
       // saved region was left with a bogus single-point-repeated polygon forever. 'finish'
       // fires exactly once, with the true final id and complete geometry, so creation is
       // persisted there instead.
-      draw.on('finish', (id) => {
+      draw.on('finish', (id, context) => {
         draw.setMode('select')
         setDrawMode('idle')
+
+        // terra-draw's 'finish' event fires for far more than completing a brand-new
+        // polygon - also 'edit', 'dragFeature', 'dragCoordinate', 'dragCoordinateResize',
+        // 'deleteCoordinate', and 'insertMidpoint', i.e. every time finishes dragging or
+        // vertex-editing an *already-persisted* selected polygon. Those are already
+        // persisted below via the 'change' handler's type==='update' branch - without this
+        // check, finishing an edit on an existing region *also* ran the "brand-new
+        // polygon" logic below and POSTed a second, duplicate region with the same
+        // name/geometry as the original. This was the real cause of the 2026-09-24
+        // live-site "Region 1" duplicate - not the unrelated (and already-fixed)
+        // React Strict Mode remount race this component also guards against elsewhere.
+        if (context.action !== 'draw') return
+
+        if (drawTargetRef.current === 'site') {
+          drawTargetRef.current = 'region'
+          const siteFeature = draw.getSnapshotFeature(id)
+          if (siteFeature && siteFeature.geometry.type === 'Polygon') {
+            const geometry = siteFeature.geometry as GeoJSON.Polygon
+            draw.removeFeatures([id])
+            onSiteDrawnRef.current?.(geometry)
+          }
+          return
+        }
 
         const feature = draw.getSnapshotFeature(id)
         if (!feature || feature.geometry.type !== 'Polygon') return
@@ -668,7 +933,7 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
           // top of an NZ region would otherwise also toggle that region underneath on
           // every click. Bail here and let the device/drawn-region's own handler own the
           // click instead.
-          const shadowingLayers = ['device-point', 'td-polygon', 'td-point'].filter((id) => map.getLayer(id))
+          const shadowingLayers = ['device-point', 'deployment-point', 'sites-fill', 'td-polygon', 'td-point'].filter((id) => map.getLayer(id))
           if (shadowingLayers.length > 0 && map.queryRenderedFeatures(e.point, { layers: shadowingLayers }).length > 0) {
             return
           }
@@ -1086,7 +1351,7 @@ const ProjectMap = forwardRef<ProjectMapHandle, ProjectMapProps>(function Projec
 
         {drawMode === 'drawing' && (
           <span className="px-4 py-1.5 rounded-full text-sm font-medium bg-brand-500/20 border border-brand-500/40 text-brand-100">
-            Click to place points, double-click to finish
+            {drawTargetRef.current === 'site' ? 'Drawing a site: click to place corners, double-click to finish' : 'Click to place points, double-click to finish'}
           </span>
         )}
 

@@ -127,8 +127,8 @@ export default function DeviceManager({
 
   function openEditForm(device: Device) {
     setName(device.name)
-    setLat(String(device.lat))
-    setLon(String(device.lon))
+    setLat(device.lat != null ? String(device.lat) : '')
+    setLon(device.lon != null ? String(device.lon) : '')
     setFilenameFormat((device.filenameFormat as FilenameFormat | null) ?? '')
     setSaveError(null)
     setEditingDevice(device)
@@ -246,7 +246,7 @@ export default function DeviceManager({
                 <li key={d.id} className="flex items-center justify-between gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2">
                   <div className="min-w-0">
                     <p className="text-sm text-white truncate">{d.name}</p>
-                    <p className="text-[11px] text-gray-500 font-mono">{d.lat.toFixed(4)}, {d.lon.toFixed(4)}</p>
+                    <p className="text-[11px] text-gray-500 font-mono">{d.lat != null && d.lon != null ? `${d.lat.toFixed(4)}, ${d.lon.toFixed(4)}` : 'Not deployed yet'}</p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <button onClick={() => openEditForm(d)} className="text-xs text-gray-400 hover:text-white transition-colors">Edit</button>
