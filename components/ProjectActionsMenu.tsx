@@ -24,6 +24,7 @@ export default function ProjectActionsMenu({ project }: { project: Project }) {
   const items = [
     { label: 'Files', href: `/projects/files?projectId=${encodeURIComponent(project.id)}` },
     { label: 'Label', href: `/projects/labeling?projectId=${encodeURIComponent(project.id)}` },
+    { label: 'Sites', href: `/projects/map?projectId=${encodeURIComponent(project.id)}` },
     { label: 'Models', href: `/projects/models?projectId=${encodeURIComponent(project.id)}` },
     { label: 'Upload', href: `/projects/map?projectId=${encodeURIComponent(project.id)}&panel=upload` },
     ...(project.role === 'admin'

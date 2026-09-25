@@ -86,6 +86,12 @@ export interface Project {
   description?: string
   isPublic: boolean
   role: ProjectRole
+  /** True for the project's single owner (reported as 'admin' in `role`). */
+  isOwner?: boolean
+  /** The organisation that owns this project, if any. */
+  orgId?: string | null
+  /** Machine detections scoring below this (0-1) don't create consensus observations. */
+  detectionConsensusThreshold?: number | null
 }
 
 export function listProjects(): Promise<Project[]> {
@@ -212,8 +218,7 @@ export interface CompleteUploadPayload {
   /** Virtual folder path (e.g. "Site A/2026-summer") — derived from the source directory
    *  structure when uploading a folder, editable. */
   folder?: string
-  /** Which saved device this came from, if one was selected — provenance only, doesn't
-   *  affect lat/lon/recordedAt (those are still sent explicitly above). */
+  /** Which saved device this came from, if one was selected. */
   deviceId?: string
   /** A trained custom model to also run against this file, alongside Perch. */
   modelVersionId?: string
@@ -223,15 +228,88 @@ export interface CompleteUploadResponse {
   jobId: string
 }
 
-/** Tell the API the upload finished — this is what actually creates the processing job. */
-export function completeUpload(
+// --- Sites and deployments -------------------------------------------------------------
+// Every file belongs to a deployment (one time-boxed placement of a device at a point). The
+// upload UI still asks only for a device + location, so the deployment is found (or created)
+// from those. One promise per (project, device, location) so a batch of
+// files uploaded in parallel shares a single deployment instead of racing to create several.
+
+interface DeploymentDto {
+  id: string
+  siteId: string | null
+  deviceId: string | null
+  lat: number
+  lon: number
+  deploymentEnd: string | null
+}
+
+const deploymentPromises = new Map<string, Promise<string>>()
+
+function ensureDeployment(
+  projectId: string,
+  spec: { deviceId?: string; lat: number; lon: number; startsAt: string }
+): Promise<string> {
+  const key = `${projectId}|${spec.deviceId ?? ''}|${spec.lat.toFixed(4)}|${spec.lon.toFixed(4)}`
+  const cached = deploymentPromises.get(key)
+  if (cached) return cached
+
+  const promise = (async () => {
+    const existing = await apiFetch<DeploymentDto[]>(`/v1/projects/${projectId}/deployments?limit=500`)
+    const match = existing.find(
+      (d) =>
+        (d.deviceId ?? undefined) === spec.deviceId &&
+        !d.deploymentEnd &&
+        Math.abs(d.lat - spec.lat) < 1e-4 &&
+        Math.abs(d.lon - spec.lon) < 1e-4
+    )
+    if (match) return match.id
+
+    // No site is created here: a deployment is just a device at a point, and the API places it in
+    // whichever drawn site area contains it (none, if it isn't inside one).
+    const deployment = await apiFetch<{ id: string }>(`/v1/projects/${projectId}/deployments`, {
+      method: 'POST',
+      body: {
+        deviceId: spec.deviceId,
+        modality: 'audio',
+        lat: spec.lat,
+        lon: spec.lon,
+        deploymentStart: spec.startsAt,
+      },
+    })
+    return deployment.id
+  })()
+
+  // A failure shouldn't poison later attempts.
+  promise.catch(() => deploymentPromises.delete(key))
+  deploymentPromises.set(key, promise)
+  return promise
+}
+
+/** Tell the API the upload finished — registers the file (hashing what was actually stored)
+ *  and queues its automated analysis. */
+export async function completeUpload(
   projectId: string,
   payload: CompleteUploadPayload
 ): Promise<CompleteUploadResponse> {
-  return apiFetch<CompleteUploadResponse>(`/v1/projects/${projectId}/uploads/complete`, {
-    method: 'POST',
-    body: payload,
+  const deploymentId = await ensureDeployment(projectId, {
+    deviceId: payload.deviceId,
+    lat: payload.lat,
+    lon: payload.lon,
+    startsAt: payload.recordedAt,
   })
+  const media = await apiFetch<{ jobId: string | null }>(`/v1/projects/${projectId}/uploads/complete`, {
+    method: 'POST',
+    body: {
+      fileKey: payload.fileKey,
+      deploymentId,
+      capturedAt: payload.recordedAt,
+      lat: payload.lat,
+      lon: payload.lon,
+      folder: payload.folder,
+      requestedModelVersionId: payload.modelVersionId,
+    },
+  })
+  return { jobId: media.jobId ?? '' }
 }
 
 export type JobStatus = 'pending' | 'processing' | 'complete' | 'failed'
@@ -240,12 +318,14 @@ export interface Job {
   id: string
   status: JobStatus
   error?: string
-  assetId?: string
+  mediaId?: string
 }
 
 export function getJob(jobId: string): Promise<Job> {
   return apiFetch<Job>(`/v1/jobs/${jobId}`)
 }
+
+// --- Media (shown to the rest of the app as "assets": a recording and its metadata) -------
 
 export interface Asset {
   id: string
@@ -256,14 +336,46 @@ export interface Asset {
   lon: number | null
   recordedAt: string | null
   durationSeconds: number | null
-  /** Which saved device (if any) this recording came from — provenance only. */
+  /** Which saved device (if any) this recording came from. */
   deviceId: string | null
   createdAt: string
   latestJobId: string | null
   latestJobStatus: JobStatus | null
 }
 
-export function listAssets(
+interface MediaDto {
+  id: string
+  filename: string
+  contentType: string
+  folder: string | null
+  lat: number | null
+  lon: number | null
+  capturedAt: string
+  durationSeconds: number | null
+  deviceId: string | null
+  analysisJobId: string | null
+  analysisStatus: JobStatus | null
+  createdAt: string
+}
+
+function toAsset(m: MediaDto): Asset {
+  return {
+    id: m.id,
+    filename: m.filename,
+    contentType: m.contentType,
+    folder: m.folder,
+    lat: m.lat,
+    lon: m.lon,
+    recordedAt: m.capturedAt,
+    durationSeconds: m.durationSeconds,
+    deviceId: m.deviceId,
+    createdAt: m.createdAt,
+    latestJobId: m.analysisJobId,
+    latestJobStatus: m.analysisStatus,
+  }
+}
+
+export async function listAssets(
   projectId: string,
   options: { folder?: string; limit?: number } = {}
 ): Promise<Asset[]> {
@@ -271,11 +383,12 @@ export function listAssets(
   if (options.folder !== undefined) params.set('folder', options.folder)
   if (options.limit !== undefined) params.set('limit', String(options.limit))
   const qs = params.toString()
-  return apiFetch<Asset[]>(`/v1/projects/${projectId}/assets${qs ? `?${qs}` : ''}`)
+  const media = await apiFetch<MediaDto[]>(`/v1/projects/${projectId}/media${qs ? `?${qs}` : ''}`)
+  return media.map(toAsset)
 }
 
-export function getAsset(projectId: string, assetId: string): Promise<Asset> {
-  return apiFetch<Asset>(`/v1/projects/${projectId}/assets/${assetId}`)
+export async function getAsset(projectId: string, assetId: string): Promise<Asset> {
+  return toAsset(await apiFetch<MediaDto>(`/v1/projects/${projectId}/media/${assetId}`))
 }
 
 export interface AssetUpdatePayload {
@@ -286,20 +399,23 @@ export interface AssetUpdatePayload {
   recordedAt?: string
 }
 
-export function updateAsset(
+export async function updateAsset(
   projectId: string,
   assetId: string,
   patch: AssetUpdatePayload
 ): Promise<Asset> {
-  return apiFetch<Asset>(`/v1/projects/${projectId}/assets/${assetId}`, {
-    method: 'PATCH',
-    body: patch,
-  })
+  const { recordedAt, ...rest } = patch
+  const body = recordedAt !== undefined ? { ...rest, capturedAt: recordedAt } : rest
+  return toAsset(
+    await apiFetch<MediaDto>(`/v1/projects/${projectId}/media/${assetId}`, { method: 'PATCH', body })
+  )
 }
 
-/** Hard, irreversible delete — removes the DB record and the original file from storage. */
+/** Hard, irreversible delete — removes the file from storage along with its detections,
+ *  labels and observations (the API refuses this without `force`, which is recorded in the
+ *  project's audit log). */
 export function deleteAsset(projectId: string, assetId: string): Promise<void> {
-  return apiFetch<void>(`/v1/projects/${projectId}/assets/${assetId}`, {
+  return apiFetch<void>(`/v1/projects/${projectId}/media/${assetId}?force=true`, {
     method: 'DELETE',
   })
 }
@@ -313,10 +429,13 @@ export interface DownloadUrlResponse {
   downloadUrl: string
 }
 
-/** Short-lived signed GET URL for an existing asset's audio, for playback. */
-export function getAssetDownloadUrl(projectId: string, assetId: string): Promise<DownloadUrlResponse> {
-  return apiFetch<DownloadUrlResponse>(`/v1/projects/${projectId}/assets/${assetId}/download-url`)
+/** Short-lived signed GET URL for a recording, for playback. */
+export async function getAssetDownloadUrl(projectId: string, assetId: string): Promise<DownloadUrlResponse> {
+  const { url } = await apiFetch<{ url: string }>(`/v1/projects/${projectId}/media/${assetId}/download-url`)
+  return { downloadUrl: url }
 }
+
+// --- Detections (machine evidence) -------------------------------------------------------
 
 export interface Detection {
   id: string
@@ -330,7 +449,18 @@ export interface Detection {
   lon: number | null
 }
 
-export function listDetections(
+interface DetectionDto {
+  id: string
+  mediaId: string
+  scientificName: string
+  confidence: number
+  spatialRegion: { offset_s?: number; window_s?: number } | null
+  modelVersionLabel: string | null
+  lat: number | null
+  lon: number | null
+}
+
+export async function listDetections(
   projectId: string,
   options: {
     assetId?: string
@@ -339,26 +469,39 @@ export function listDetections(
     limit?: number
     /** Restrict to one preview set — e.g. 'perch_v2' (global top-5), 'perch_v2_nz'
      *  (NZ-restricted top-5, see nzModelVersion below), or a custom model's
-     *  'custom:{name}:v{n}' tag. Omit for every model_version mixed together. */
+     *  'custom:{name}:v{n}' tag. Omit for every model version mixed together. */
     modelVersion?: string
   } = {}
 ): Promise<Detection[]> {
   const params = new URLSearchParams()
-  if (options.assetId !== undefined) params.set('asset_id', options.assetId)
+  if (options.assetId !== undefined) params.set('media_id', options.assetId)
   if (options.species !== undefined) params.set('species', options.species)
-  if (options.minScore !== undefined) params.set('min_score', String(options.minScore))
+  if (options.minScore !== undefined) params.set('min_confidence', String(options.minScore))
   if (options.limit !== undefined) params.set('limit', String(options.limit))
-  if (options.modelVersion !== undefined) params.set('model_version', options.modelVersion)
+  if (options.modelVersion !== undefined) params.set('model_version_label', options.modelVersion)
   const qs = params.toString()
-  return apiFetch<Detection[]>(`/v1/projects/${projectId}/detections${qs ? `?${qs}` : ''}`)
+  const rows = await apiFetch<DetectionDto[]>(`/v1/projects/${projectId}/detections${qs ? `?${qs}` : ''}`)
+  return rows.map((d) => ({
+    id: d.id,
+    assetId: d.mediaId,
+    modelVersion: d.modelVersionLabel ?? 'unknown',
+    offsetSeconds: d.spatialRegion?.offset_s ?? 0,
+    windowSeconds: d.spatialRegion?.window_s ?? 5,
+    speciesCode: d.scientificName,
+    score: d.confidence,
+    lat: d.lat,
+    lon: d.lon,
+  }))
 }
 
-/** The NZ-restricted top-5 preview's model_version tag (worker.py computes this
- *  alongside the unfiltered top-5, restricted to the ~127-species NZ Aves whitelist) —
- *  the default prediction view across the app, per lib/speciesNames.ts's whitelist. */
+/** The NZ-restricted top-5 preview's model tag (worker.py computes this alongside the
+ *  unfiltered top-5, restricted to the ~127-species NZ Aves whitelist) — the default
+ *  prediction view across the app, per lib/speciesNames.ts's whitelist. */
 export function nzModelVersion(modelVersion = 'perch_v2'): string {
   return `${modelVersion}_nz`
 }
+
+// --- Labels (human evidence) --------------------------------------------------------------
 
 export type LabelValue = 'present' | 'absent' | 'uncertain'
 
@@ -373,16 +516,42 @@ export interface Label {
   createdAt: string
 }
 
-export function listLabels(
+interface LabelDto {
+  id: string
+  mediaId: string
+  scientificName: string
+  value: LabelValue
+  spatialRegion: { offset_s?: number; window_s?: number } | null
+  labeledBy: string
+  createdAt: string
+}
+
+// Whole-file labels have no time window; this app only works with per-window ones.
+function toLabel(l: LabelDto): Label | null {
+  if (l.spatialRegion?.offset_s === undefined) return null
+  return {
+    id: l.id,
+    assetId: l.mediaId,
+    offsetSeconds: l.spatialRegion.offset_s,
+    windowSeconds: l.spatialRegion.window_s ?? 5,
+    speciesCode: l.scientificName,
+    value: l.value,
+    labeledBy: l.labeledBy,
+    createdAt: l.createdAt,
+  }
+}
+
+export async function listLabels(
   projectId: string,
   options: { assetId?: string; species?: string; limit?: number } = {}
 ): Promise<Label[]> {
   const params = new URLSearchParams()
-  if (options.assetId !== undefined) params.set('asset_id', options.assetId)
+  if (options.assetId !== undefined) params.set('media_id', options.assetId)
   if (options.species !== undefined) params.set('species', options.species)
   if (options.limit !== undefined) params.set('limit', String(options.limit))
   const qs = params.toString()
-  return apiFetch<Label[]>(`/v1/projects/${projectId}/labels${qs ? `?${qs}` : ''}`)
+  const rows = await apiFetch<LabelDto[]>(`/v1/projects/${projectId}/labels${qs ? `?${qs}` : ''}`)
+  return rows.map(toLabel).filter((l): l is Label => l !== null)
 }
 
 export interface CreateLabelPayload {
@@ -393,11 +562,17 @@ export interface CreateLabelPayload {
   value: LabelValue
 }
 
-export function createLabel(projectId: string, payload: CreateLabelPayload): Promise<Label> {
-  return apiFetch<Label>(`/v1/projects/${projectId}/labels`, {
+export async function createLabel(projectId: string, payload: CreateLabelPayload): Promise<Label> {
+  const created = await apiFetch<LabelDto>(`/v1/projects/${projectId}/labels`, {
     method: 'POST',
-    body: payload,
+    body: {
+      mediaId: payload.assetId,
+      scientificName: payload.speciesCode,
+      value: payload.value,
+      spatialRegion: { offset_s: payload.offsetSeconds, window_s: payload.windowSeconds },
+    },
   })
+  return toLabel(created) as Label
 }
 
 export interface SpeciesReadiness {
@@ -535,16 +710,33 @@ export function deleteRegion(projectId: string, regionId: string): Promise<void>
 export interface Device {
   id: string
   name: string
-  lat: number
-  lon: number
+  deviceType?: string
+  serial?: string | null
+  modality?: string
+  /** Where the device currently is: its active deployment's location, else its own saved
+   *  location, else its latest deployment's. Null if it has never been placed anywhere. */
+  lat: number | null
+  lon: number | null
   /** e.g. 'audiomoth', 'audiomoth_hex', 'iso_datetime' — see lib/filenameParsing.ts.
    *  Null means no known convention; recording time is filled in manually. */
   filenameFormat: string | null
   createdAt: string
 }
 
-export function listDevices(projectId: string): Promise<Device[]> {
-  return apiFetch<Device[]>(`/v1/projects/${projectId}/devices`)
+export async function listDevices(projectId: string): Promise<Device[]> {
+  const [devices, deployments] = await Promise.all([
+    apiFetch<Device[]>(`/v1/projects/${projectId}/devices`),
+    listDeployments(projectId),
+  ])
+  // A device is an instrument; where it is comes from its deployments. Prefer the active one.
+  return devices.map((device) => {
+    const mine = deployments
+      .filter((d) => d.deviceId === device.id)
+      .sort((a, b) => b.deploymentStart.localeCompare(a.deploymentStart))
+    const active = mine.find((d) => !d.deploymentEnd)
+    const spot = active ?? (device.lat != null && device.lon != null ? null : mine[0])
+    return spot ? { ...device, lat: spot.lat, lon: spot.lon } : device
+  })
 }
 
 export interface CreateDevicePayload {
@@ -834,3 +1026,121 @@ export function listDeletedProjectUsage(): Promise<DeletedProjectUsage[]> {
 }
 
 export { apiFetch }
+
+// --- Sites and deployments -------------------------------------------------------------
+// A site is a named place; a deployment is one time-boxed placement of a device (or a manual
+// survey visit) at a site. Every file belongs to exactly one deployment.
+
+export interface Site {
+  id: string
+  name: string
+  /** GeoJSON Point ([lon, lat]) or Polygon. */
+  geometry: { type: string; coordinates: unknown }
+  description: string | null
+  createdAt: string
+}
+
+export interface CreateSitePayload {
+  name: string
+  geometry: { type: string; coordinates: unknown }
+  description?: string | null
+}
+
+export type UpdateSitePayload = Partial<CreateSitePayload>
+
+export function listSites(projectId: string): Promise<Site[]> {
+  return apiFetch<Site[]>(`/v1/projects/${projectId}/sites`)
+}
+
+export function createSite(projectId: string, payload: CreateSitePayload): Promise<Site> {
+  return apiFetch<Site>(`/v1/projects/${projectId}/sites`, { method: 'POST', body: payload })
+}
+
+export function updateSite(projectId: string, siteId: string, patch: UpdateSitePayload): Promise<Site> {
+  return apiFetch<Site>(`/v1/projects/${projectId}/sites/${siteId}`, { method: 'PATCH', body: patch })
+}
+
+/** Rejected (409) while the site still has deployments. Requires admin. */
+export function deleteSite(projectId: string, siteId: string): Promise<void> {
+  return apiFetch<void>(`/v1/projects/${projectId}/sites/${siteId}`, { method: 'DELETE' })
+}
+
+export type DeploymentStatus = 'active' | 'ended' | 'retrieved'
+export type DevicePlatform = 'buoy' | 'vegetation' | 'building' | 'structure' | 'unattached'
+
+export interface Deployment {
+  id: string
+  /** Null when the deployment isn't inside any site area. */
+  siteId: string | null
+  /** Null for a manual survey visit with no instrument. */
+  deviceId: string | null
+  modality: string
+  lat: number
+  lon: number
+  deviceHeightM: number | null
+  devicePlatform: DevicePlatform | null
+  deploymentStart: string
+  deploymentEnd: string | null
+  recordingSchedule: string | null
+  locationType: string | null
+  status: DeploymentStatus
+  tags: string[]
+  createdAt: string
+}
+
+export interface CreateDeploymentPayload {
+  /** Omit to join whichever site area contains the location (none if it isn't inside one). */
+  siteId?: string
+  deviceId?: string | null
+  modality?: string
+  lat: number
+  lon: number
+  deviceHeightM?: number | null
+  devicePlatform?: DevicePlatform | null
+  deploymentStart: string
+  recordingSchedule?: string | null
+  locationType?: string | null
+}
+
+export type UpdateDeploymentPayload = Partial<Omit<CreateDeploymentPayload, 'siteId' | 'deviceId' | 'modality'>> & {
+  /** Move to another site, or null to take it out of its site. */
+  siteId?: string | null
+}
+
+export function listDeployments(projectId: string, options: { siteId?: string } = {}): Promise<Deployment[]> {
+  const params = new URLSearchParams({ limit: '500' })
+  if (options.siteId) params.set('site_id', options.siteId)
+  return apiFetch<Deployment[]>(`/v1/projects/${projectId}/deployments?${params}`)
+}
+
+export function createDeployment(projectId: string, payload: CreateDeploymentPayload): Promise<Deployment> {
+  return apiFetch<Deployment>(`/v1/projects/${projectId}/deployments`, { method: 'POST', body: payload })
+}
+
+export function updateDeployment(
+  projectId: string,
+  deploymentId: string,
+  patch: UpdateDeploymentPayload
+): Promise<Deployment> {
+  return apiFetch<Deployment>(`/v1/projects/${projectId}/deployments/${deploymentId}`, {
+    method: 'PATCH',
+    body: patch,
+  })
+}
+
+/** Close out a deployment. 'retrieved' means the device was physically collected. */
+export function endDeployment(
+  projectId: string,
+  deploymentId: string,
+  options: { endedAt?: string; status?: 'ended' | 'retrieved' } = {}
+): Promise<Deployment> {
+  return apiFetch<Deployment>(`/v1/projects/${projectId}/deployments/${deploymentId}/end`, {
+    method: 'POST',
+    body: options,
+  })
+}
+
+/** Rejected (409) while the deployment still has files. Requires admin. */
+export function deleteDeployment(projectId: string, deploymentId: string): Promise<void> {
+  return apiFetch<void>(`/v1/projects/${projectId}/deployments/${deploymentId}`, { method: 'DELETE' })
+}

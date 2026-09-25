@@ -5,13 +5,20 @@ import Link from 'next/link'
 import { listAssets, listDetections, listLabels, listModels, type Asset, type Detection, type Label, type Model } from '@/lib/apiClient'
 import { ASSET_POLL_INTERVAL_MS, hasUnsettledAsset } from '@/lib/assetPolling'
 import { useSpeciesNames } from '@/lib/speciesNames'
+import type { Site } from '@/lib/apiClient'
 import type { ProjectMapRegion } from './ProjectMap'
 import TrainModelPanel from './TrainModelPanel'
 
 interface ProjectMapSidebarProps {
   projectId: string
   regions: ProjectMapRegion[]
+  sites: Site[]
+  selectedSiteId: string | null
+  onSelectSite: (id: string) => void
+  /** The panel for the selected site, rendered at the top. */
+  siteCard: React.ReactNode
   isDrawing: boolean
+  onDrawSite: () => void
   onStartDrawing: () => void
   onCancelDrawing: () => void
   onRemoveRegion: (id: string) => void
@@ -84,7 +91,12 @@ function StatRow({ label, value }: { label: string; value: string | number }) {
 export default function ProjectMapSidebar({
   projectId,
   regions,
+  sites,
+  selectedSiteId,
+  onSelectSite,
+  siteCard,
   isDrawing,
+  onDrawSite,
   onStartDrawing,
   onCancelDrawing,
   onRemoveRegion,
@@ -213,6 +225,48 @@ export default function ProjectMapSidebar({
           />
         </div>
       )}
+
+      {siteCard}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs uppercase tracking-wider text-gray-500 font-medium">Sites</h3>
+          <Link
+            href={`/projects/sites?projectId=${encodeURIComponent(projectId)}`}
+            className="text-xs text-gray-500 hover:text-white transition-colors"
+          >
+            Manage sites &amp; deployments →
+          </Link>
+        </div>
+        <button
+          onClick={onDrawSite}
+          disabled={isDrawing}
+          className="w-full bg-white/10 text-white border border-white/20 px-4 py-2.5 rounded-full text-sm font-medium hover:bg-white/20 transition-colors disabled:opacity-50 mb-3"
+        >
+          + Draw site
+        </button>
+        {sites.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            A site is an area you monitor. Draw one on the map, and files uploaded inside it join it automatically.
+          </p>
+        ) : (
+          <ul className="space-y-1.5">
+            {sites.map((site) => (
+              <li key={site.id}>
+                <button
+                  onClick={() => onSelectSite(site.id)}
+                  className={`w-full flex items-center gap-2 text-sm text-left rounded px-2 py-1 transition-colors ${selectedSiteId === site.id ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5'}`}
+                >
+                  <span className="w-2.5 h-2.5 rounded-sm inline-block shrink-0 border border-[#f4c95d]" style={{ background: 'rgba(244,201,93,0.25)' }} />
+                  <span className="truncate">{site.name}</span>
+                  <span className="ml-auto text-[10px] uppercase tracking-wider text-gray-600">
+                    {site.geometry.type === 'Point' ? 'Point' : 'Area'}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="mb-4">
         <div className="flex items-center justify-between mb-3">

@@ -156,8 +156,8 @@ function StatusLine({ row, projectId }: { row: StagingRow; projectId: string }) 
   }
   // 'submitted' - a job exists, useJobPolling tracks it from here.
   if (pollError) return <span className="text-red-400 text-xs">{pollError}</span>
-  if (job?.status === 'complete' && job.assetId) {
-    return <RowPredictions projectId={projectId} assetId={job.assetId} />
+  if (job?.status === 'complete' && job.mediaId) {
+    return <RowPredictions projectId={projectId} assetId={job.mediaId} />
   }
   if (job?.status === 'failed') {
     return <span className="text-red-400 text-xs">{job.error ?? 'Processing failed'}</span>
@@ -303,8 +303,8 @@ const MapUploadPanel = forwardRef<MapUploadPanelHandle, MapUploadPanelProps>(fun
       prev.map((r) => {
         const patch: Partial<StagingRow> = {}
         if (r.lat === '' && r.lon === '') {
-          patch.lat = String(device.lat)
-          patch.lon = String(device.lon)
+          patch.lat = device.lat != null ? String(device.lat) : ''
+          patch.lon = device.lon != null ? String(device.lon) : ''
           patch.latLonAuto = false // from the device's fixed location, not this file's own name
         }
         if (r.recordedAt === '' && device.filenameFormat) {
@@ -331,7 +331,7 @@ const MapUploadPanel = forwardRef<MapUploadPanelHandle, MapUploadPanelProps>(fun
 
   function applyDeviceToAllRows() {
     if (!selectedDevice) return
-    setRows((prev) => prev.map((r) => ({ ...r, lat: String(selectedDevice.lat), lon: String(selectedDevice.lon) })))
+    setRows((prev) => prev.map((r) => ({ ...r, lat: selectedDevice.lat != null ? String(selectedDevice.lat) : '', lon: selectedDevice.lon != null ? String(selectedDevice.lon) : '' })))
   }
 
   async function uploadOneRow(row: StagingRow) {
