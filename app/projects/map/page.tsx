@@ -115,12 +115,17 @@ function MapPageContent() {
           <h1 className="font-serif text-2xl text-white">Project Map</h1>
         </div>
         {mode === 'overview' && (
-          <button
-            onClick={() => setMode('upload')}
-            className="shrink-0 bg-white text-ocean-dark px-5 py-2.5 rounded-full text-sm font-medium hover:bg-brand-50 transition-colors"
-          >
-            + Upload recording
-          </button>
+          <div className="flex items-center gap-4 shrink-0">
+            <Link href={`/pricing?mode=plan&projectId=${projectId}`} className="text-sm text-gray-400 hover:text-white transition-colors">
+              Plan &amp; estimate
+            </Link>
+            <button
+              onClick={() => setMode('upload')}
+              className="bg-white text-ocean-dark px-5 py-2.5 rounded-full text-sm font-medium hover:bg-brand-50 transition-colors"
+            >
+              + Upload recording
+            </button>
+          </div>
         )}
       </div>
 

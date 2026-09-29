@@ -70,6 +70,8 @@ export interface Me {
   id: string
   email: string
   createdAt: string
+  /** Temporary stand-in for a staff role (see the API's EARLY_ACCESS_EMAILS). */
+  earlyAccess?: boolean
 }
 
 /** The signed-in user's own account record. Also the trigger for auto-provisioning

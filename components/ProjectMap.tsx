@@ -24,23 +24,11 @@ import {
   type Device,
 } from '@/lib/apiClient'
 import { ASSET_POLL_INTERVAL_MS, hasUnsettledAsset } from '@/lib/assetPolling'
+import { BASEMAP_STYLE_URL, DEFAULT_CENTER, DEFAULT_ZOOM, OCEAN_DARK, recolorBasemap } from '@/lib/basemap'
 
-// Keyless, free vector basemap (CARTO) — no API key/billing account needed.
-const BASEMAP_STYLE_URL = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
-
-// Same NZ-centered default view used by the homepage's abstract map (components/Map.tsx),
-// so the two maps "feel" like the same place even though this one is a real basemap.
-const DEFAULT_CENTER: [number, number] = [172.5, -41.2]
-const DEFAULT_ZOOM = 5
 
 const TEAL = '#4ecdc4'
 
-// Matches this app's Tailwind `ocean` tokens (tailwind.config.ts) — the basemap gets
-// recolored to these after load so the map reads as part of the page, not a boxed widget
-// sitting on top of it: ocean = page background exactly, land is the lighter tone that
-// "stands out" from it.
-const OCEAN_DARK = '#0a1628'
-const OCEAN_MID = '#0d2240'
 
 // Must match components/Map.tsx's REGION_COLORS exactly — same palette used for the NZ
 // region polygons and species/point colors on the homepage's sound map, reused here for
@@ -215,21 +203,6 @@ function colorForRegionId(id: string | number): `#${string}` {
   return REGION_COLORS[hash % REGION_COLORS.length] as `#${string}`
 }
 
-// Recolor the fetched basemap style so its ocean matches the page background exactly and
-// land reads as a lighter, contrasting tone from the same app palette — the goal is for
-// the map to feel like part of the page rather than a boxed widget sitting on it.
-function recolorBasemap(map: maplibregl.Map) {
-  const setIfPresent = (layerId: string, prop: string, value: unknown) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (map.getLayer(layerId)) map.setPaintProperty(layerId, prop as any, value as any)
-  }
-  setIfPresent('background', 'background-color', OCEAN_DARK)
-  setIfPresent('water', 'fill-color', OCEAN_DARK)
-  setIfPresent('water_shadow', 'fill-color', OCEAN_DARK)
-  for (const layerId of ['landcover', 'landuse', 'landuse_residential', 'park_national_park', 'park_nature_reserve']) {
-    setIfPresent(layerId, 'fill-color', OCEAN_MID)
-  }
-}
 
 // `/regions.json` (simplemaps.com) is what the homepage's abstract, non-cartographic map
 // uses — plenty for that (it's not real geography, just a stylized layout) but far too

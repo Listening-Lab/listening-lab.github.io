@@ -45,6 +45,16 @@ export default function Navbar() {
             About
           </Link>
           <Link
+            href="/services"
+            className="px-4 py-1.5 rounded-full text-sm transition-colors"
+            style={{
+              color: pathname === '/services' || pathname === '/pricing' ? TEAL : 'rgba(255,255,255,0.75)',
+              fontWeight: pathname === '/services' || pathname === '/pricing' ? 500 : undefined,
+            }}
+          >
+            Services
+          </Link>
+          <Link
             href="/contact"
             className="px-4 py-1.5 rounded-full text-sm transition-colors"
             style={{
