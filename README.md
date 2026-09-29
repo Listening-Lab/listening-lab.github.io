@@ -7,11 +7,18 @@ Built with **Next.js 14**, **Tailwind CSS**, **Framer Motion**, and **MDX**.
 ## Development
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+`npm ci` installs exactly what `package-lock.json` pins; use `npm install <pkg>` only to add or change a dependency.
+Never copy `node_modules/`, `.next/` or `out/` from another machine: `node_modules` goes stale as dependencies are
+added, and Turbopack's cache in `.next` holds absolute paths that panic ("Next.js package not found") anywhere else.
+
+To use a local API instead of production, create `.env.local` (gitignored) with one line:
+`NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`. Everything else in `.env` is public config and is committed.
 
 ## Adding a Research Item
 
