@@ -48,8 +48,8 @@ export default function Navbar() {
             href="/services"
             className="px-4 py-1.5 rounded-full text-sm transition-colors"
             style={{
-              color: pathname === '/services' || pathname === '/pricing' ? TEAL : 'rgba(255,255,255,0.75)',
-              fontWeight: pathname === '/services' || pathname === '/pricing' ? 500 : undefined,
+              color: ['/services', '/monitoring', '/platform', '/pricing'].some((p) => pathname?.startsWith(p)) ? TEAL : 'rgba(255,255,255,0.75)',
+              fontWeight: ['/services', '/monitoring', '/platform', '/pricing'].some((p) => pathname?.startsWith(p)) ? 500 : undefined,
             }}
           >
             Services

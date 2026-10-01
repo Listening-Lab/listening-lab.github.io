@@ -156,6 +156,14 @@ export default function PlanMap({
       attributionControl: { compact: true },
     })
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
+    // A basemap tile that fails to download (a network blip, or a request cut off by a quick
+    // zoom) only leaves a blank square until the next pan, so warn rather than error: without a
+    // handler maplibre console.errors it, which Next's dev overlay shows as a page error.
+    map.on('error', (e) => {
+      const tileFailed = 'tile' in e || /Failed to fetch|AJAXError/.test(String(e.error?.message ?? e.error))
+      if (tileFailed) console.warn('[PlanMap] basemap tile failed to load:', e.error?.message ?? e.error)
+      else console.error('[PlanMap] maplibre error:', e.error)
+    })
     map.on('load', () => {
       recolorBasemap(map)
       addLandOutline(map).catch((e) => console.error('[PlanMap] outline:', e))

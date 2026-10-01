@@ -13,7 +13,7 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
-  return { title: LEVEL_SERVICES.find((s) => s.slug === slug)?.name ?? 'What we do' }
+  return { title: LEVEL_SERVICES.find((s) => s.slug === slug)?.name ?? 'Monitoring projects' }
 }
 
 function List({ title, items }: { title: string; items: string[] }) {
@@ -39,7 +39,7 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
     <div className="min-h-screen bg-ocean-dark">
       <div className="max-w-4xl mx-auto px-6 pt-28 pb-24">
         <p className="text-sm text-gray-500 mb-8">
-          <Link href="/services" className="hover:text-white transition-colors">← What we do</Link>
+          <Link href="/monitoring" className="hover:text-white transition-colors">← Monitoring projects</Link>
         </p>
 
         <AnimatedSection className="grid md:grid-cols-[3fr_2fr] gap-10 items-center mb-16">
@@ -80,7 +80,7 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
             {others.map((o, i) => (
               <span key={o.slug}>
                 {i > 0 && ' · '}
-                <Link href={`/services/${o.slug}`} className="text-gray-300 hover:text-white">{o.name}</Link>
+                <Link href={`/monitoring/${o.slug}`} className="text-gray-300 hover:text-white">{o.name}</Link>
               </span>
             ))}
           </span>

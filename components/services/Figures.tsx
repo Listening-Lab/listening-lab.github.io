@@ -101,6 +101,7 @@ function Invasive() {
   )
 }
 
+
 const FIGURES: Record<ServiceSlug, () => React.ReactElement> = {
   richness: Richness,
   occupancy: Occupancy,

@@ -1,4 +1,4 @@
-// Content for /services and its subpages. The level ids match lib/pricing.ts so a subpage
+// Content for /monitoring and its subpages. The level ids match lib/pricing.ts so a subpage
 // can link straight to the estimator with its level preselected.
 
 export type ServiceSlug = 'richness' | 'occupancy' | 'density' | 'invasive'

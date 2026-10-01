@@ -102,7 +102,7 @@ function PricingContent() {
   const [existing, setExisting] = useState<PlannedDeployment[]>([])
   const [mode, setMode] = useState<'simple' | 'plan'>(searchParams.get('mode') === 'plan' ? 'plan' : 'simple')
 
-  // ?levels=richness,occupancy preselects, e.g. when arriving from a /services page.
+  // ?levels=richness,occupancy preselects, e.g. when arriving from a /monitoring page.
   const [levels, setLevels] = useState<MeasurementLevel[]>(() => {
     const fromUrl = (searchParams.get('levels') ?? '').split(',').filter((l): l is MeasurementLevel =>
       LEVELS.some((x) => x.id === l),
@@ -518,7 +518,7 @@ function PricingContent() {
             <p className="text-xs tracking-widest uppercase mb-3 font-medium" style={{ color: TEAL }}>
               Pricing
             </p>
-            <h1 className="font-serif text-4xl text-white mb-3">Estimate a project</h1>
+            <h1 className="font-serif text-4xl text-white mb-3">Estimate a monitoring project</h1>
             <p className="text-gray-400 max-w-xl leading-relaxed">
               Most of the cost is expert validation, which depends on what you want to measure and how
               many species and devices are involved. Processing and storage depend on how much audio
@@ -586,7 +586,7 @@ function PricingContent() {
             <h3 className="text-white mb-2">What the fee covers</h3>
             <p>
               Processing and storage are passed through at cost. The fee is for the work that turns
-              audio into ecological insight: targeted expert validation, calibration and statistical
+              audio into ecological insight: expert validation, calibration and statistical
               estimation for each species.
             </p>
           </div>
@@ -601,7 +601,7 @@ function PricingContent() {
             <h3 className="text-white mb-2">What you get</h3>
             <p>
               Calibrated results with confidence intervals. Some designs can&apos;t give a clear
-              answer; we check that before you start. <Link href="/services" className="underline hover:text-white">More about how we work</Link>.
+              answer; we check that before you start. <Link href="/monitoring" className="underline hover:text-white">More about how we work</Link>.
             </p>
           </div>
         </div>

@@ -30,7 +30,7 @@ export default function PlatformPage() {
     <div className="min-h-screen bg-ocean-dark">
       <div className="max-w-4xl mx-auto px-6 pt-28 pb-24">
         <p className="text-sm text-gray-500 mb-8">
-          <Link href="/services" className="hover:text-white transition-colors">← What we do</Link>
+          <Link href="/platform" className="hover:text-white transition-colors">← Platform</Link>
         </p>
 
         <AnimatedSection className="mb-16 max-w-3xl">
